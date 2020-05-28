@@ -1,0 +1,219 @@
+Solve the Poission problem using SOR by OpenMP.
+
+Enter the latttice size (N,N) (N must be divisible by 2).The lattice size is (1024,1024).
+Set the value of omega.
+The value of omega is 1.9940 .
+Set the maximum iteration times.
+The maximum iteration times is 10000000 .
+Set the stopping criteria.
+The stopping criteria is 5.0000e-10 .
+Set the display interval during iterations.
+The display interval is set to be 100000 .
+
+Start Preparation...
+Preparation ends.
+Total preparation time is 0.0301 s.
+Starts computation with N_threads = 1 , error = 9.68848904e-01 ...
+Computation time is 33.4034 s.
+Total iteration is 4908 ; total time is 33.4336 s.
+
+Preparation ends.
+Total preparation time is 0.0116 s.
+Starts computation with N_threads = 2 , error = 9.68848904e-01 ...
+Computation time is 16.9863 s.
+Total iteration is 4908 ; total time is 16.9979 s.
+
+Preparation ends.
+Total preparation time is 0.0081 s.
+Starts computation with N_threads = 3 , error = 9.68848904e-01 ...
+Computation time is 12.0408 s.
+Total iteration is 4908 ; total time is 12.0489 s.
+
+Preparation ends.
+Total preparation time is 0.0064 s.
+Starts computation with N_threads = 4 , error = 9.68848904e-01 ...
+Computation time is 10.0229 s.
+Total iteration is 4908 ; total time is 10.0293 s.
+
+Preparation ends.
+Total preparation time is 0.0053 s.
+Starts computation with N_threads = 5 , error = 9.68848904e-01 ...
+Computation time is 9.5571 s.
+Total iteration is 4908 ; total time is 9.5624 s.
+
+Preparation ends.
+Total preparation time is 0.0051 s.
+Starts computation with N_threads = 6 , error = 9.68848904e-01 ...
+Computation time is 9.3972 s.
+Total iteration is 4908 ; total time is 9.4023 s.
+
+Preparation ends.
+Total preparation time is 0.0047 s.
+Starts computation with N_threads = 7 , error = 9.68848904e-01 ...
+Computation time is 9.4199 s.
+Total iteration is 4908 ; total time is 9.4246 s.
+
+Preparation ends.
+Total preparation time is 0.0044 s.
+Starts computation with N_threads = 8 , error = 9.68848904e-01 ...
+Computation time is 9.4734 s.
+Total iteration is 4908 ; total time is 9.4778 s.
+
+Preparation ends.
+Total preparation time is 0.0073 s.
+Starts computation with N_threads = 9 , error = 9.68848904e-01 ...
+Computation time is 15.1053 s.
+Total iteration is 4908 ; total time is 15.1126 s.
+
+Preparation ends.
+Total preparation time is 0.0067 s.
+Starts computation with N_threads = 10 , error = 9.68848904e-01 ...
+Computation time is 14.1390 s.
+Total iteration is 4908 ; total time is 14.1457 s.
+
+Solve the Poission problem using SOR by OpenMP.
+
+Enter the latttice size (N,N) (N must be divisible by 2).The lattice size is (256,256).
+Set the value of omega.
+The value of omega is 1.9775 .
+Set the maximum iteration times.
+The maximum iteration times is 10000000 .
+Set the stopping criteria.
+The stopping criteria is 5.0000e-10 .
+Set the display interval during iterations.
+The display interval is set to be 100000 .
+
+Start Preparation...
+Preparation ends.
+Total preparation time is 0.0019 s.
+Starts computation with N_threads = 1 , error = 9.69331255e-01 ...
+Computation time is 0.4733 s.
+Total iteration is 1189 ; total time is 0.4753 s.
+
+Preparation ends.
+Total preparation time is 0.0008 s.
+Starts computation with N_threads = 2 , error = 9.69331255e-01 ...
+Computation time is 0.2387 s.
+Total iteration is 1189 ; total time is 0.2395 s.
+
+Preparation ends.
+Total preparation time is 0.0006 s.
+Starts computation with N_threads = 3 , error = 9.69331255e-01 ...
+Computation time is 0.1646 s.
+Total iteration is 1189 ; total time is 0.1652 s.
+
+Preparation ends.
+Total preparation time is 0.0005 s.
+Starts computation with N_threads = 4 , error = 9.69331255e-01 ...
+Computation time is 0.1239 s.
+Total iteration is 1189 ; total time is 0.1243 s.
+
+Preparation ends.
+Total preparation time is 0.0004 s.
+Starts computation with N_threads = 5 , error = 9.69331255e-01 ...
+Computation time is 0.1040 s.
+Total iteration is 1189 ; total time is 0.1044 s.
+
+Preparation ends.
+Total preparation time is 0.0003 s.
+Starts computation with N_threads = 6 , error = 9.69331255e-01 ...
+Computation time is 0.0849 s.
+Total iteration is 1189 ; total time is 0.0853 s.
+
+Preparation ends.
+Total preparation time is 0.0003 s.
+Starts computation with N_threads = 7 , error = 9.69331255e-01 ...
+Computation time is 0.0774 s.
+Total iteration is 1189 ; total time is 0.0777 s.
+
+Preparation ends.
+Total preparation time is 0.0025 s.
+Starts computation with N_threads = 8 , error = 9.69331255e-01 ...
+Computation time is 0.0659 s.
+Total iteration is 1189 ; total time is 0.0683 s.
+
+Preparation ends.
+Total preparation time is 0.0008 s.
+Starts computation with N_threads = 9 , error = 9.69331255e-01 ...
+Computation time is 0.2025 s.
+Total iteration is 1189 ; total time is 0.2034 s.
+
+Preparation ends.
+Total preparation time is 0.0004 s.
+Starts computation with N_threads = 10 , error = 9.69331255e-01 ...
+Computation time is 0.2344 s.
+Total iteration is 1189 ; total time is 0.2348 s.
+
+Solve the Poission problem using SOR by OpenMP.
+
+Enter the latttice size (N,N) (N must be divisible by 2).The lattice size is (2048,2048).
+Set the value of omega.
+The value of omega is 1.9970 .
+Set the maximum iteration times.
+The maximum iteration times is 10000000 .
+Set the stopping criteria.
+The stopping criteria is 5.0000e-09 .
+Set the display interval during iterations.
+The display interval is set to be 100000 .
+
+Start Preparation...
+Preparation ends.
+Total preparation time is 0.0966 s.
+
+Starts computation with Ni_threads = 1 , error = 9.68768242e-01 ...
+Computation time is 333.5085 s.
+Total iterations is 9279 ; total time is 333.6051 s.
+Preparation ends.
+Total preparation time is 0.0395 s.
+
+Starts computation with Ni_threads = 2 , error = 9.68768242e-01 ...
+Computation time is 169.5411 s.
+Total iterations is 9279 ; total time is 169.5807 s.
+Preparation ends.
+Total preparation time is 0.0270 s.
+
+Starts computation with Ni_threads = 3 , error = 9.68768242e-01 ...
+Computation time is 114.7400 s.
+Total iterations is 9279 ; total time is 114.7669 s.
+Preparation ends.
+Total preparation time is 0.0203 s.
+
+Starts computation with Ni_threads = 4 , error = 9.68768242e-01 ...
+Computation time is 93.1779 s.
+Total iterations is 9279 ; total time is 93.1982 s.
+Preparation ends.
+Total preparation time is 0.0177 s.
+
+Starts computation with Ni_threads = 5 , error = 9.68768242e-01 ...
+Computation time is 78.9697 s.
+Total iterations is 9279 ; total time is 78.9874 s.
+Preparation ends.
+Total preparation time is 0.0152 s.
+
+Starts computation with Ni_threads = 6 , error = 9.68768242e-01 ...
+Computation time is 72.2680 s.
+Total iterations is 9279 ; total time is 72.2833 s.
+Preparation ends.
+Total preparation time is 0.0148 s.
+
+Starts computation with Ni_threads = 7 , error = 9.68768242e-01 ...
+Computation time is 66.7454 s.
+Total iterations is 9279 ; total time is 66.7602 s.
+Preparation ends.
+Total preparation time is 0.0130 s.
+
+Starts computation with Ni_threads = 8 , error = 9.68768242e-01 ...
+Computation time is 66.6878 s.
+Total iterations is 9279 ; total time is 66.7008 s.
+Preparation ends.
+Total preparation time is 0.0222 s.
+
+Starts computation with Ni_threads = 9 , error = 9.68768242e-01 ...
+Computation time is 103.5443 s.
+Total iterations is 9279 ; total time is 103.5665 s.
+Preparation ends.
+Total preparation time is 0.0195 s.
+
+Starts computation with Ni_threads = 10 , error = 9.68768242e-01 ...
+Computation time is 94.5927 s.
+Total iterations is 9279 ; total time is 94.6122 s.
