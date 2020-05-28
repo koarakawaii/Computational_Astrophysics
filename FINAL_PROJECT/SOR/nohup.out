@@ -1,0 +1,42 @@
+Solve the Poission problem using SOR by OpenMP.
+
+Enter the latttice size (N,N) (N must be divisible by 2).The lattice size is (4096,4096).
+Set the value of omega.
+The value of omega is 1.9900 .
+Set the maximum iteration times.
+The maximum iteration times is 1000000 .
+Set the stopping criteria.
+The stopping criteria is 5.0000e-08 .
+Set the display interval during iterations.
+The display interval is set to be 10000 .
+Set the GPU threads per block (tx,ty). (N/2 must be divisible by tx and N must be divisible by N)
+Threads per block for GPU is (16,16) .
+The block per grid will be set automatically.Blocks per grid for GPU is (128,256) .
+Set the number of OpenMP threads.
+The number of OpenMP threads is 8.
+
+Start Preparation...
+Preparation ends.
+Total preparation time is 0.0018 ms.
+
+Starts computation with error = 9.68727884e-01...
+Iteration = 10000 , error = 4.24141519e+01 .
+Iteration = 20000 , error = 1.29784257e+01 .
+Iteration = 30000 , error = 3.99473566e+00 .
+Iteration = 40000 , error = 1.22977325e+00 .
+Iteration = 50000 , error = 3.78585523e-01 .
+Iteration = 60000 , error = 1.16547515e-01 .
+Iteration = 70000 , error = 3.58791407e-02 .
+Iteration = 80000 , error = 1.10453898e-02 .
+Iteration = 90000 , error = 3.40032215e-03 .
+Iteration = 100000 , error = 1.04678883e-03 .
+Iteration = 110000 , error = 3.22253845e-04 .
+Iteration = 120000 , error = 9.92057754e-05 .
+Iteration = 130000 , error = 3.05404920e-05 .
+Iteration = 140000 , error = 9.40187402e-06 .
+Iteration = 150000 , error = 2.89429527e-06 .
+Iteration = 160000 , error = 8.90844292e-07 .
+Iteration = 170000 , error = 2.73229736e-07 .
+Iteration = 180000 , error = 8.31701019e-08 .
+Computation time is 6192836.5000 ms.
+Total iteration is 184191 ; total time is 6192836.5000 ms.
