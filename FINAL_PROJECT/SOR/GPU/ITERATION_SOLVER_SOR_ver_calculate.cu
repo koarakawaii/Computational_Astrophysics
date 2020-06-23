@@ -5,20 +5,17 @@
 #include <math.h>
 #include <string.h>
 #include <cuda_runtime.h>
-#define neighbor_dim 2048000
+#include <cublas_v2.h>
 
 void FPRINTF(FILE*, int N, double*);
-double EVALUATE_ERROR(int, int, double*);
+double EVALUATE_ERROR(int, int, double, double*);
 
-__global__ void INITIALIZE(int N, double dx, double* rho_even, double* rho_odd, double* rho, double* field_even, double* field_odd, double* field_analytic, double *error_block)
+__global__ void INITIALIZE(int N, double dx, double* rho_even, double* rho_odd, double* rho, double* field_even, double* field_odd, double* field_analytic)
 {
-	extern __shared__ double sm[];
 	int idx_x = threadIdx.x + blockIdx.x*blockDim.x;
 	int idx_y = threadIdx.y + blockIdx.y*blockDim.y;
 	int idx = idx_x + idx_y*N/2;
-	int idx_sm = threadIdx.x + blockDim.x*threadIdx.y;
 	int idx_site_e, idx_site_o;
-	sm[idx_sm] = 0.0;
 
 	int site_x_e = (2*idx)%N;		
 	int site_y_e = (2*idx)/N;
@@ -36,86 +33,37 @@ __global__ void INITIALIZE(int N, double dx, double* rho_even, double* rho_odd, 
 	double y_o = site_y_o*dx;
 	idx_site_o = site_x_o + N*site_y_o;
 	
-	rho[idx_site_e]= 2.*x_e*(y_e-1)*(y_e-2.*x_e+x_e*y_e+2)*exp(x_e-y_e);
-	rho_even[idx] = rho[idx_site_e];
 	field_analytic[idx_site_e] = x_e*(1.-x_e)*y_e*(1.-y_e)*exp(x_e-y_e);
 
 	if ( site_x_e==0 || site_x_e==N-1 || site_y_e==0 || site_y_e==N-1 )
+	{
 		field_even[idx] = field_analytic[idx_site_e];
+		rho[idx_site_e] = 0.0;
+		rho_even[idx] = 0.0;
+	}
 	else
+	{
 		field_even[idx] = 0.0;
+		rho[idx_site_e] = 2.*x_e*(y_e-1)*(y_e-2.*x_e+x_e*y_e+2)*exp(x_e-y_e);
+		rho_even[idx] = rho[idx_site_e];
 //		field_even[idx] = field_analytic[idx_site_o];
+	}
 	
-	rho[idx_site_o]= 2.*x_o*(y_o-1)*(y_o-2.*x_o+x_o*y_o+2)*exp(x_o-y_o);
-	rho_odd[idx] = rho[idx_site_o];
 	field_analytic[idx_site_o] = x_o*(1.-x_o)*y_o*(1.-y_o)*exp(x_o-y_o);
 
 	if ( site_x_o==0 || site_x_o==N-1 || site_y_o==0 || site_y_o==N-1 )
+	{
 		field_odd[idx] = field_analytic[idx_site_o];
+		rho[idx_site_o]= 0.0;
+		rho_odd[idx] = 0.0;
+	}
 	else
+	{
 		field_odd[idx] = 0.0;
+		rho[idx_site_o]= 2.*x_o*(y_o-1)*(y_o-2.*x_o+x_o*y_o+2)*exp(x_o-y_o);
+		rho_odd[idx] = rho[idx_site_o];
 //		field_odd[idx] = field_analytic[idx_site_o];
-
-	// construct neighbors for even sites
-	int site_x = idx%(N/2);
-	int site_y = idx/(N/2);
-	if ( (idx>N/2-1)&&(idx<(N*N)/2-N/2))
-	{
-		if (site_y%2==0)
-		{
-			if (site_x!=0)
-			{
-				int L = site_x-1 + site_y*(N/2);
-				int R = idx;	
-				int D = site_x + (site_y-1)*(N/2);
-				int U = site_x + (site_y+1)*(N/2);
-				sm[idx_sm] += pow((field_odd[L]+field_odd[R]+field_odd[D]+field_odd[U]-4.0*field_even[idx])/dx/dx-rho_even[idx], 2.0);
-//				printf("%d\t%d\t%d\t%d\t%d\n", idx, L, R, U, D);
-			}
-			if (site_x!=(N/2)-1)
-			{
-				int L = idx;	
-				int R = site_x +1 + site_y*(N/2);
-				int D = site_x + (site_y-1)*(N/2);
-				int U = site_x + (site_y+1)*(N/2);
-				sm[idx_sm] += pow((field_even[L]+field_even[R]+field_even[D]+field_even[U]-4.0*field_odd[idx])/dx/dx-rho_odd[idx], 2.0);
-//				printf("%d\t%d\t%d\t%d\t%d\n", idx, L, R, U, D);
-			}
-		}		
-		else
-		{
-			if (site_x!=(N/2)-1)
-			{
-				int L = idx;
-				int R = site_x+1 + site_y*(N/2);	
-				int D = site_x + (site_y-1)*(N/2);
-				int U = site_x + (site_y+1)*(N/2);
-				sm[idx_sm] += pow((field_odd[L]+field_odd[R]+field_odd[D]+field_odd[U]-4.0*field_even[idx])/dx/dx-rho_even[idx], 2.0);
-//				printf("%d\t%d\t%d\t%d\t%d\n", idx, L, R, U, D);
-			}
-			if (site_x!=0)
-			{
-				int L = site_x-1 + site_y*(N/2);	
-				int R = idx;
-				int D = site_x + (site_y-1)*(N/2);
-				int U = site_x + (site_y+1)*(N/2);
-				sm[idx_sm] += pow((field_even[L]+field_even[R]+field_even[D]+field_even[U]-4.0*field_odd[idx])/dx/dx-rho_odd[idx], 2.0);
-//				printf("%d\t%d\t%d\t%d\t%d\n", idx, L, R, U, D);
-			}
-		}
 	}
-	__syncthreads();
-
-//	printf("%d\t%d\t%.4f\n", idx, idx_sm, sm[idx_sm]);
-	for (int shift=blockDim.x*blockDim.y/2; shift>0; shift/=2)
-	{
-		if (idx_sm<shift)
-			sm[idx_sm] += sm[idx_sm+shift];
-		__syncthreads();
-	}
-	if (idx_sm==0)
-		error_block[blockIdx.x+blockIdx.y*gridDim.x] = sm[0];
-//	printf("%d\t%.4f\n", blockIdx.x+gridDim.x*blockIdx.y, sm[0]);
 }
 
 __global__ void SOR_SOLVER_EVEN(int N, double dx, double omega, double* field_even, double* field_odd, double* rho_even)
@@ -328,6 +276,13 @@ int main(void)
 	dim3 tpb(tpb_x,tpb_y);
 	dim3 bpg(bpg_x,bpg_y);
 
+	cublasMath_t mode = CUBLAS_TENSOR_OP_MATH;
+    cublasPointerMode_t mode_pt = CUBLAS_POINTER_MODE_HOST;
+    cublasHandle_t handle;
+    cublasCreate(&handle);
+    cublasSetMathMode(handle, mode);
+    cublasSetPointerMode(handle, mode_pt);
+
 	cudaEventRecord(start,0);
 	cudaMallocManaged(&field_even, size_lattice/2);
 	cudaMallocManaged(&field_odd, size_lattice/2);
@@ -337,9 +292,14 @@ int main(void)
 	cudaMallocManaged(&rho, size_lattice);
 	cudaMallocManaged(&error_block, N_block*sizeof(double));
 
-	INITIALIZE<<<bpg,tpb,size_sm>>>(N, dx, rho_even, rho_odd, rho, field_even, field_odd, field_analytic, error_block);
+	INITIALIZE<<<bpg,tpb>>>(N, dx, rho_even, rho_odd, rho, field_even, field_odd, field_analytic);
+	ERROR<<<bpg,tpb,size_sm>>>(N, dx, rho_even, rho_odd, field_even, field_odd, error_block);
 	cudaDeviceSynchronize();
 
+	double norm;
+	cublasDdot(handle, N*N, rho, 1, rho, 1, &norm);
+    norm = sqrt(norm);
+	
 	// debug
 //	for (int j=0; j<N; j++)
 //	{
@@ -360,7 +320,7 @@ int main(void)
 	printf("Total preparation time is %.4f ms.\n\n", preparation_time);
 
 	cudaEventRecord(start,0);	
-	double error = EVALUATE_ERROR(N, N_block, error_block); 
+	double error = EVALUATE_ERROR(N, N_block, norm, error_block); 
 
 	printf("Starts computation with error = %.8e...\n", error);
 	iter = 0;
@@ -372,7 +332,7 @@ int main(void)
 //		cudaDeviceSynchronize();
 		ERROR<<<bpg,tpb,size_sm>>>(N, dx, rho_even, rho_odd, field_even, field_odd, error_block);
 		cudaDeviceSynchronize();
-		error = EVALUATE_ERROR(N, N_block, error_block);
+		error = EVALUATE_ERROR(N, N_block, norm, error_block);
 		iter += 1;
 		if (iter%display_interval==0)
 			printf("Iteration = %ld , error = %.8e .\n", iter, error);
@@ -420,12 +380,12 @@ int main(void)
 	return EXIT_SUCCESS;
 }
 
-double EVALUATE_ERROR(int N, int N_block, double* error_block)
+double EVALUATE_ERROR(int N, int N_block, double norm, double* error_block)
 {
 	double error = 0.0;
 	for (int i=0; i<N_block; i++)
 		error += error_block[i];
-	return sqrt(error/pow(N-2,2.));
+	return sqrt(error)/norm;
 }
 
 void FPRINTF(FILE *output_file, int N, double *array)

@@ -8,13 +8,11 @@
 void FPRINTF(FILE*, int N, double, double*);
 double EVALUATE_ERROR(int, int, double*);
 
-__global__ void INITIALIZE(int N, double dx, double* rho, double* field, double* field_analytic, double* error_block)
+__global__ void INITIALIZE(int N, double dx, double* rho, double* field, double* field_analytic)
 {
-	extern __shared__ double sm[];
 	int idx_x = threadIdx.x + blockIdx.x*blockDim.x;
 	int idx_y = threadIdx.y + blockIdx.y*blockDim.y;
 	int idx = idx_x + idx_y*N;
-	int idx_sm = threadIdx.x + blockDim.x*threadIdx.y;
 
 	double x = idx_x*dx;
 	double y = idx_y*dx;
@@ -23,23 +21,36 @@ __global__ void INITIALIZE(int N, double dx, double* rho, double* field, double*
 		
 	if (idx_x!=0&&idx_x!=N-1&&idx_y!=0&&idx_y!=N-1)
 	{
-		int L = idx_x-1 + idx_y*N;
-		int R = idx_x+1 + idx_y*N;
-		int U = idx_x + (idx_y+1)*N;
-		int D = idx_x + (idx_y-1)*N;
 		field[idx] = 0.0;
 		rho[idx] = (2.*x*(y-1)*(y-2.*x+x*y+2)*exp(x-y))*dx*dx;	// Notice that rho has been times by dx^2!!
-		sm[idx_sm] = pow((field[L]+field[R]+field[U]+field[D]-4.*field[idx])-rho[idx], 2.);
 	}
 	else
 	{
 		field[idx] = field_analytic[idx];
 		rho[idx] = 0.0;
-		sm[idx_sm] = 0.0;
 	}
+}
+
+__global__ void EVALUATE_ERROR_BLOCK(int N, double* rho, double* field, double* error_block)
+{
+	extern __shared__ double sm[];
+	int idx_x = threadIdx.x + blockIdx.x*blockDim.x;
+	int idx_y = threadIdx.y + blockIdx.y*blockDim.y;
+	int idx = idx_x + N*idx_y;
+	int idx_sm = threadIdx.x + blockDim.x*threadIdx.y;
+
+	if (idx_x!=0&&idx_x!=N-1&&idx_y!=0&&idx_y!=N-1)
+	{
+		int L = idx_x-1 + idx_y*N;
+		int R = idx_x+1 + idx_y*N;
+		int U = idx_x + (idx_y+1)*N;
+		int D = idx_x + (idx_y-1)*N;
+		sm[idx_sm] = pow((field[L]+field[R]+field[U]+field[D]-4.*field[idx])-rho[idx], 2.);
+	}
+	else
+		sm[idx_sm] = 0.0;
 	__syncthreads();
-//	printf("%d\t%d\t%.4f\n", idx, idx_sm, sm[idx_sm]);
-	
+
 	for (int shift=blockDim.x*blockDim.y/2; shift>0; shift/=2)
 	{
 		if (idx_sm<shift)
@@ -91,7 +102,7 @@ int main(void)
 	size_t size_lattice, size_sm;
 	cudaEvent_t start, stop;
 	FILE* output_field, *output_rho;
-	printf("Solve the Poission problem using SOR by OpenMP.\n\n");
+	printf("Solve the Poission problem using CG by GPU.\n\n");
 	printf("Enter the latttice size (N,N) (N must be divisible by 2).");
 	scanf("%d", &N);
 	printf("The lattice size is (%d,%d).\n", N, N);
@@ -107,7 +118,7 @@ int main(void)
 	printf("Set the display interval during iterations.\n");
 	scanf("%d", &display_interval);
 	printf("The display interval is set to be %d .\n", display_interval);
-	printf("Set the GPU threads per block (tx,ty). (N must be divisible by tx and N must be divisible by N)\n");
+	printf("Set the GPU threads per block (tx,ty). (N must be divisible by tx and N must be divisible by ty)\n");
 	scanf("%d %d", &tpb_x, &tpb_y);
 	if (N%tpb_x!=0)
 	{
@@ -159,7 +170,12 @@ int main(void)
 	cudaMallocManaged(&rho, size_lattice);
 	cudaMallocManaged(&error_block, N_block*sizeof(double));
 
-	INITIALIZE<<<bpg,tpb,size_sm>>>(N, dx, rho, field, field_analytic, error_block);
+	INITIALIZE<<<bpg,tpb>>>(N, dx, rho, field, field_analytic);
+	EVALUATE_ERROR_BLOCK<<<bpg,tpb,size_sm>>>(N, rho, field, error_block);
+	double norm;
+	cublasDdot(handle, N*N, rho, 1, rho, 1, &norm);
+	norm = sqrt(norm);
+	
 	cudaDeviceSynchronize();
 	cudaMemcpy(r, rho, size_lattice, cudaMemcpyDeviceToDevice);
 	cudaMemcpy(p, rho, size_lattice, cudaMemcpyDeviceToDevice);
@@ -178,10 +194,10 @@ int main(void)
 	double error = EVALUATE_ERROR(N, N_block, error_block); 
 	double temp;
 
-	printf("Starts computation with error = %.8e...\n", error);
+	printf("Starts computation with error = %.8e...\n", sqrt(error)/norm);
 	iter = 0;
 	
-	while (sqrt(error)/(double)(N-2)>criteria&&iter<iter_max)
+	while (sqrt(error)/norm>criteria&&iter<iter_max)
 	{
 		LAPLACIAN<<<bpg,tpb>>>(N, dx, photon_mass, p, A_p);
 		cublasDdot(handle, N*N, p, 1, A_p, 1, &temp);
@@ -196,7 +212,7 @@ int main(void)
 		error = temp;
 		iter += 1;
 		if (iter%display_interval==0)
-			printf("Iteration = %ld , error = %.8e .\n", iter, sqrt(error)/(double)(N-2));
+			printf("Iteration = %ld , error = %.8e .\n", iter, sqrt(error)/norm);
 	}
   
 	output_field = fopen("simulated_field_distribution_GPU_CG.txt","w");
@@ -211,6 +227,7 @@ int main(void)
 	cudaFree(field);
 	cudaFree(r);
 	cudaFree(p);
+	cudaFree(A_p);
 	cudaFree(field_analytic);
 	cudaFree(rho);
 	cudaFree(error_block);

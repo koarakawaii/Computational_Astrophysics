@@ -1,3 +1,4 @@
+/* Test adding a minus sign to the charge in order to have a positive definite Laplacian matrix. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <omp.h>
@@ -8,13 +9,11 @@
 void FPRINTF(FILE*, int N, double, double*);
 double EVALUATE_ERROR(int, int, double*);
 
-__global__ void INITIALIZE(int N, double dx, double* rho, double* field, double* field_analytic, double* error_block)
+__global__ void INITIALIZE(int N, double dx, double* rho, double* field, double* field_analytic)
 {
-	extern __shared__ double sm[];
 	int idx_x = threadIdx.x + blockIdx.x*blockDim.x;
 	int idx_y = threadIdx.y + blockIdx.y*blockDim.y;
 	int idx = idx_x + idx_y*N;
-	int idx_sm = threadIdx.x + blockDim.x*threadIdx.y;
 
 	double x = idx_x*dx;
 	double y = idx_y*dx;
@@ -23,23 +22,36 @@ __global__ void INITIALIZE(int N, double dx, double* rho, double* field, double*
 		
 	if (idx_x!=0&&idx_x!=N-1&&idx_y!=0&&idx_y!=N-1)
 	{
-		int L = idx_x-1 + idx_y*N;
-		int R = idx_x+1 + idx_y*N;
-		int U = idx_x + (idx_y+1)*N;
-		int D = idx_x + (idx_y-1)*N;
 		field[idx] = 0.0;
-		rho[idx] = (2.*x*(y-1)*(y-2.*x+x*y+2)*exp(x-y))*dx*dx;	// Notice that rho has been times by dx^2!!
-		sm[idx_sm] = pow((field[L]+field[R]+field[U]+field[D]-4.*field[idx])-rho[idx], 2.);
+		rho[idx] = -(2.*x*(y-1)*(y-2.*x+x*y+2)*exp(x-y))*dx*dx;	// Notice that rho has been times by dx^2!!
 	}
 	else
 	{
 		field[idx] = field_analytic[idx];
 		rho[idx] = 0.0;
-		sm[idx_sm] = 0.0;
 	}
+}
+
+__global__ void EVALUATE_ERROR_BLOCK(int N, double* rho, double* field, double* error_block)
+{
+	extern __shared__ double sm[];
+	int idx_x = threadIdx.x + blockIdx.x*blockDim.x;
+	int idx_y = threadIdx.y + blockIdx.y*blockDim.y;
+	int idx = idx_x + N*idx_y;
+	int idx_sm = threadIdx.x + blockDim.x*threadIdx.y;
+
+	if (idx_x!=0&&idx_x!=N-1&&idx_y!=0&&idx_y!=N-1)
+	{
+		int L = idx_x-1 + idx_y*N;
+		int R = idx_x+1 + idx_y*N;
+		int U = idx_x + (idx_y+1)*N;
+		int D = idx_x + (idx_y-1)*N;
+		sm[idx_sm] = pow((4.*field[idx] - field[L] - field[R] - field[U] - field[D])-rho[idx], 2.);
+	}
+	else
+		sm[idx_sm] = 0.0;
 	__syncthreads();
-//	printf("%d\t%d\t%.4f\n", idx, idx_sm, sm[idx_sm]);
-	
+
 	for (int shift=blockDim.x*blockDim.y/2; shift>0; shift/=2)
 	{
 		if (idx_sm<shift)
@@ -64,7 +76,7 @@ __global__ void LAPLACIAN(int N, double dx, double photon_mass, double* p, doubl
 		int U = idx_x + (idx_y+1)*N;
 		int D = idx_x + (idx_y-1)*N;
 
-		A_p[idx] = (p[L]+p[R]+p[U]+p[D]-(4.-pow(photon_mass*dx,2.))*p[idx]);
+		A_p[idx] = ((4.-pow(photon_mass*dx,2.))*p[idx]- p[L] - p[R] - p[U] - p[D]);
 //		printf("%d\t%.4f\n", idx, A_p[idx]);
 	}
 	else
@@ -80,48 +92,6 @@ __global__ void DAXPY(int N, double c, double *A, double *B)
 	A[idx] = c*A[idx] + B[idx];
 }
 
-//__global__ void ERROR(int N, double dx, int* L_e, int* L_o, int* R_e, int* R_o, int* D_e, int* D_o, int* U_e, int* U_o, double* rho_even, double* rho_odd, double* field_even, double* field_odd, double *error_block)
-//{
-//	extern __shared__ double sm[];
-//	int idx_x = threadIdx.x + blockIdx.x*blockDim.x;
-//	int idx_y = threadIdx.y + blockIdx.y*blockDim.y;
-//	int idx = idx_x + idx_y*N/2;
-//	int idx_sm = threadIdx.x + blockDim.x*threadIdx.y;
-//	sm[idx_sm] = 0.0;
-//
-//	int site_x = idx%(N/2);
-//	int site_y = idx/(N/2);
-//	if ( (idx>N/2-1)&&(idx<(N*N)/2-N/2))
-//	{
-//		if (site_y%2==0)
-//		{
-//			if (site_x!=0)
-//				sm[idx_sm] += pow((field_odd[L_e[idx]]+field_odd[R_e[idx]]+field_odd[D_e[idx]]+field_odd[U_e[idx]]-4.0*field_even[idx])/dx/dx-rho_even[idx], 2.0);
-//			if (site_x!=(N/2)-1)
-//				sm[idx_sm] += pow((field_even[L_o[idx]]+field_even[R_o[idx]]+field_even[D_o[idx]]+field_even[U_o[idx]]-4.0*field_odd[idx])/dx/dx-rho_odd[idx], 2.0);
-//			
-//		}		
-//		else
-//		{
-//			if (site_x!=(N/2)-1)
-//				sm[idx_sm] += pow((field_odd[L_e[idx]]+field_odd[R_e[idx]]+field_odd[D_e[idx]]+field_odd[U_e[idx]]-4.0*field_even[idx])/dx/dx-rho_even[idx], 2.0);
-//			if (site_x!=0)
-//				sm[idx_sm] += pow((field_even[L_o[idx]]+field_even[R_o[idx]]+field_even[D_o[idx]]+field_even[U_o[idx]]-4.0*field_odd[idx])/dx/dx-rho_odd[idx], 2.0);
-//
-//		}
-//	}
-//	__syncthreads();
-//
-//	for (int shift=blockDim.x*blockDim.y/2; shift>0; shift/=2)
-//	{
-//		if (idx_sm<shift)
-//			sm[idx_sm] += sm[idx_sm+shift];
-//		__syncthreads();
-//	}
-//	if (idx_sm==0)
-//		error_block[blockIdx.x+blockIdx.y*gridDim.x] = sm[0];
-//}
-
 int main(void)
 {
 	int N, N_block, display_interval, tpb_x, tpb_y, bpg_x, bpg_y;
@@ -133,13 +103,13 @@ int main(void)
 	size_t size_lattice, size_sm;
 	cudaEvent_t start, stop;
 	FILE* output_field, *output_rho;
-	printf("Solve the Poission problem using SOR by OpenMP.\n\n");
-	printf("Enter the latttice size (N,N) (N must be divisible by 2).");
+	printf("Solve the Poission problem using CG by GPU.\n\n");
+	printf("Enter the latttice size (N,N) .");
 	scanf("%d", &N);
 	printf("The lattice size is (%d,%d).\n", N, N);
 	printf("Set the photon mass.\n");
 	scanf("%lf", &photon_mass);
-	printf("The photon mass is %.4e .\n");
+	printf("The photon mass is %.4e .\n", photon_mass);
 	printf("Set the maximum iteration times.\n");
 	scanf("%ld", &iter_max);
 	printf("The maximum iteration times is %ld .\n", iter_max);
@@ -149,7 +119,7 @@ int main(void)
 	printf("Set the display interval during iterations.\n");
 	scanf("%d", &display_interval);
 	printf("The display interval is set to be %d .\n", display_interval);
-	printf("Set the GPU threads per block (tx,ty). (N must be divisible by tx and N must be divisible by N)\n");
+	printf("Set the GPU threads per block (tx,ty). (N must be divisible by tx and N must be divisible by ty)\n");
 	scanf("%d %d", &tpb_x, &tpb_y);
 	if (N%tpb_x!=0)
 	{
@@ -173,7 +143,7 @@ int main(void)
 
 	printf("Start Preparation...\n");
 	dx = 1./(N-1);	
-	N_block = (N/tpb_x)*(N/tpb_y);
+	N_block = bpg_x*bpg_y;
 	size_lattice = N*N*sizeof(double);
 	size_sm = tpb_x*tpb_y*sizeof(double);
 	output_field = fopen("analytical_field_distribution_CG.txt","w");
@@ -201,13 +171,18 @@ int main(void)
 	cudaMallocManaged(&rho, size_lattice);
 	cudaMallocManaged(&error_block, N_block*sizeof(double));
 
-	INITIALIZE<<<bpg,tpb,size_sm>>>(N, dx, rho, field, field_analytic, error_block);
+	INITIALIZE<<<bpg,tpb>>>(N, dx, rho, field, field_analytic);
+	EVALUATE_ERROR_BLOCK<<<bpg,tpb,size_sm>>>(N, rho, field, error_block);
+	double norm;
+	cublasDdot(handle, N*N, rho, 1, rho, 1, &norm);
+	norm = sqrt(norm);
+	
 	cudaDeviceSynchronize();
 	cudaMemcpy(r, rho, size_lattice, cudaMemcpyDeviceToDevice);
 	cudaMemcpy(p, rho, size_lattice, cudaMemcpyDeviceToDevice);
 	
 	FPRINTF(output_field, N, 1., field_analytic);
-	FPRINTF(output_rho, N, pow(dx,-2.), rho);
+	FPRINTF(output_rho, N, -pow(dx,-2.), rho);
 	cudaEventRecord(start,0);
 
 	printf("Preparation ends.\n");
@@ -220,10 +195,10 @@ int main(void)
 	double error = EVALUATE_ERROR(N, N_block, error_block); 
 	double temp;
 
-	printf("Starts computation with error = %.8e...\n", error);
+	printf("Starts computation with error = %.8e...\n", sqrt(error)/norm);
 	iter = 0;
 	
-	while (sqrt(error)/(double)(N-2)>criteria&&iter<iter_max)
+	while (sqrt(error)/norm>criteria&&iter<iter_max)
 	{
 		LAPLACIAN<<<bpg,tpb>>>(N, dx, photon_mass, p, A_p);
 		cublasDdot(handle, N*N, p, 1, A_p, 1, &temp);
@@ -238,7 +213,7 @@ int main(void)
 		error = temp;
 		iter += 1;
 		if (iter%display_interval==0)
-			printf("Iteration = %ld , error = %.8e .\n", iter, sqrt(error)/(double)(N-2));
+			printf("Iteration = %ld , error = %.8e .\n", iter, sqrt(error)/norm);
 	}
   
 	output_field = fopen("simulated_field_distribution_GPU_CG.txt","w");
@@ -253,6 +228,7 @@ int main(void)
 	cudaFree(field);
 	cudaFree(r);
 	cudaFree(p);
+	cudaFree(A_p);
 	cudaFree(field_analytic);
 	cudaFree(rho);
 	cudaFree(error_block);
@@ -270,42 +246,6 @@ double EVALUATE_ERROR(int N, int N_block, double* error_block)
 	return error;
 }
 
-//void LAPLACIAN_SOR(int N, double dx, double omega, double* field_even, double* field_odd, double *rho_even, double *rho_odd, int **neighbor_even, int **neighbor_odd)
-//{
-//#	pragma omp parallel for
-//	for (int i_E=N/2; i_E<(N*N)/2-N/2; i_E++)
-//	{
-//		int i_x = i_E%(N/2);
-//		int i_y = i_E/(N/2);
-//		if (i_y%2==0)
-//		{
-//			if (i_x!=0)
-//				field_even[i_E] += 0.25*omega*( field_odd[neighbor_even[0][i_E]] + field_odd[neighbor_even[1][i_E]] + field_odd[neighbor_even[2][i_E]] + field_odd[neighbor_even[3][i_E]] - dx*dx*rho_even[i_E] - 4.*field_even[i_E]);
-//		}		
-//		else
-//		{
-//			if (i_x!=(N/2)-1)
-//				field_even[i_E] += 0.25*omega*( field_odd[neighbor_even[0][i_E]] + field_odd[neighbor_even[1][i_E]] + field_odd[neighbor_even[2][i_E]] + field_odd[neighbor_even[3][i_E]] - dx*dx*rho_even[i_E] - 4.*field_even[i_E]);
-//		}
-//	}
-//#	pragma omp parallel for
-//	for (int i_O=N/2; i_O<(N*N)/2-N/2; i_O++)
-//	{
-//		int i_x = i_O%(N/2);
-//		int i_y = i_O/(N/2);
-//		if (i_y%2==0)
-//		{
-//			if (i_x!=(N/2)-1)
-//				field_odd[i_O] += 0.25*omega*( field_even[neighbor_odd[0][i_O]] + field_even[neighbor_odd[1][i_O]] + field_even[neighbor_odd[2][i_O]] + field_even[neighbor_odd[3][i_O]] - dx*dx*rho_odd[i_O] - 4.*field_odd[i_O]);
-//		}		
-//		else
-//		{
-//			if (i_x!=0)
-//				field_odd[i_O] += 0.25*omega*( field_even[neighbor_odd[0][i_O]] + field_even[neighbor_odd[1][i_O]] + field_even[neighbor_odd[2][i_O]] + field_even[neighbor_odd[3][i_O]] - dx*dx*rho_odd[i_O] - 4.*field_odd[i_O]);
-//		}
-//	}
-//}
-
 void FPRINTF(FILE *output_file, int N, double scale, double *array)
 {
 	for (int j=0; j<N; j++)
@@ -314,5 +254,4 @@ void FPRINTF(FILE *output_file, int N, double scale, double *array)
 			fprintf(output_file, "%.8e\t", scale*array[i+j*N]);
 		fprintf(output_file, "\n");
 	}
-
 }
