@@ -124,12 +124,12 @@ void PRINT_MATRIX(int row, double* A)
 	printf("\n");
 }
 
-void FPRINTF(FILE *output_file, int N, double scale, double *array)
+void FPRINTF(FILE *output_file, int row, double scale, double *A)
 {
-    for (int j=0; j<N; j++)
+    for (int i=0; i<row; i++)
     {
-        for (int i=0; i<N; i++)
-            fprintf(output_file, "%.4f\t", scale*array[i+j*N]);
+        for (int j=0; j<row; j++)
+            fprintf(output_file, "%.4f\t", scale*A[i+j*row]);
         fprintf(output_file, "\n");
     }
 }

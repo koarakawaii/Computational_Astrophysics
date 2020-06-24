@@ -6,8 +6,9 @@ CFLAGS  := -O3 -Wall -g
 NVCC    := $(CUDIR)/bin/nvcc
 NVFLAGS := -O3 --compiler-options -fopenmp -I$(CUDIR)/include -I$(GSLDIR)/include -m64 -arch=compute_75 -code=sm_75 -Xptxas -v
 
-BIN     := test_SSOR_M_MATRIX cholesky_factorization_CPU cholesky_factorization_GPU CONJUGATE_GRADIENT_SOLVER_TEST
-FILE_M_TEST		:= test_SSOR_M_MATRIX.c 
+BIN     := test_SSOR_M_MATRIX cholesky_factorization_CPU cholesky_factorization_GPU CONJUGATE_GRADIENT_SOLVER_TEST incomplete_cholesky_factorization_CPU test_IC_M_MATRIX
+FILE_M_SSOR_TEST		:= test_SSOR_M_MATRIX.c 
+FILE_M_IC_TEST		:= test_IC_M_MATRIX.c 
 FILE_CHOLESKY_CPU := cholesky_factorization_CPU.c
 FILE_CHOLESKY_GPU := cholesky_factorization_GPU.cu
 FILE_CG_TEST	:= CONJUGATE_GRADIENT_SOLVER_TEST.cu 
@@ -16,9 +17,13 @@ LIB     := -lgsl -lgslcblas -llapack -lm -lcublas -lcurand -lcusolver
 
 all: $(BIN)
 
-M_TEST:	test_SSOR_M_MATRIX
-test_SSOR_M_MATRIX:$(FILE_M_TEST)
-	$(CC) $(CFLAGS) -o test_SSOR_M_MATRIX $(FILE_M_TEST) $(LIB)
+M_SSOR_TEST:	test_SSOR_M_MATRIX
+test_SSOR_M_MATRIX:$(FILE_M_SSOR_TEST)
+	$(CC) $(CFLAGS) -o test_SSOR_M_MATRIX $(FILE_M_SSOR_TEST) $(LIB)
+
+M_IC_TEST:	test_IC_M_MATRIX
+test_IC_M_MATRIX:$(FILE_M_IC_TEST)
+	$(CC) $(CFLAGS) -o test_IC_M_MATRIX $(FILE_M_IC_TEST) $(LIB)
 
 CHOLESKY_CPU: cholesky_factorization_CPU
 cholesky_factorization_CPU: $(FILE_CHOLESKY_CPU)

@@ -1,4 +1,4 @@
-/* Use Cholesky pre-condition */ 
+/* Use incomplete Cholesky pre-condition */ 
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,17 +7,16 @@
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 
-void FPRINTF(FILE*, int N, double, double*);
-void PRE_CONDITION_SSOR(int N, double, double, double, double*, double*);
+void FPRINTF(FILE*, int, double, double*);
+void PRE_CONDITION_IC(int, double, double, double*, double*, double*);
+void PRODUCE_CHOLESKY(int, int, double, double, double*);
 double EVALUATE_ERROR(int, int, double*);
-extern void dpotrf_(char*, int*, double*, int*, int*);
 
-__global__ void INITIALIZE(int N, double dx, double photon_mass, double* rho, double* field, double* field_analytic, double *A)
+__global__ void INITIALIZE(int N, double dx, double* rho, double* field, double* field_analytic)
 {
 	int idx_x = threadIdx.x + blockIdx.x*blockDim.x;
 	int idx_y = threadIdx.y + blockIdx.y*blockDim.y;
 	int idx = idx_x + idx_y*N;
-	int row = N*N;
 
 	double x = idx_x*dx;
 	double y = idx_y*dx;
@@ -28,23 +27,11 @@ __global__ void INITIALIZE(int N, double dx, double photon_mass, double* rho, do
 	{
 		field[idx] = 0.0;
 		rho[idx] = -(2.*x*(y-1)*(y-2.*x+x*y+2)*exp(x-y))*dx*dx;	// Notice that rho has been times by dx^2!!
-
-        if (idx_x>1)
-            A[(idx-1)*row + idx] = -1.;
-        if (idx_x<N-2)
-            A[(idx+1)*row + idx] = -1.;
-        if (idx_y>1)
-            A[(idx-N)*row + idx] = -1.;
-        if (idx_y<N-2)
-            A[(idx+N)*row + idx] = -1.;
-        A[idx*row + idx] = 4. - pow(photon_mass*dx,2.);
 	}
 	else
 	{
 		field[idx] = field_analytic[idx];
 		rho[idx] = 0.0;
-
-        A[idx*row + idx] = 1.;
 	}
 }
 
@@ -92,7 +79,7 @@ __global__ void LAPLACIAN(int N, double dx, double photon_mass, double* p, doubl
 		int U = idx_x + (idx_y+1)*N;
 		int D = idx_x + (idx_y-1)*N;
 
-		A_p[idx] = ((4.-pow(photon_mass*dx,2.))*p[idx]-p[L]-p[R]-p[U]-p[D]);
+		A_p[idx] = ((4.+pow(photon_mass*dx,2.))*p[idx]-p[L]-p[R]-p[U]-p[D]);
 //		printf("%d\t%.4f\n", idx, A_p[idx]);
 	}
 	else
@@ -110,12 +97,13 @@ __global__ void DAXPY(int N, double c, double *A, double *B)
 
 int main(void)
 {
-	int N, N_block, display_interval, tpb_x, tpb_y, bpg_x, bpg_y;
+	int N, N_block, row, display_interval, tpb_x, tpb_y, bpg_x, bpg_y;
 	float preparation_time, computation_time, total_time;
 	double photon_mass, dx, criteria;
 	double alpha, beta;
 	long iter, iter_max;
-	double *field, *rho, *A, *r, *r_prime, *p, *A_p, *field_analytic, *error_block;
+	double *field, *rho, *r, *r_prime, *p, *A_p, *field_analytic, *error_block;
+	double *coeff;	// store the coefficients of incomplete Cholesky factorization.
 	size_t size_lattice, size_sm;
 	cudaEvent_t start, stop;
 	FILE* output_field, *output_rho;
@@ -158,16 +146,17 @@ int main(void)
 	printf("\n");
 
 	printf("Start Preparation...\n");
+	cudaSetDevice(0);
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+
 	dx = 1./(N-1);	
+	row = N*N;
 	N_block = bpg_x*bpg_y;
 	size_lattice = N*N*sizeof(double);
 	size_sm = tpb_x*tpb_y*sizeof(double);
 	output_field = fopen("analytical_field_distribution_CG_precondition_CHOLESKY.txt","w");
 	output_rho = fopen("charge_distribution_CG_precondition_CHOLESKY.txt","w");
-
-	cudaSetDevice(0);
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
 	dim3 tpb(tpb_x,tpb_y);
 	dim3 bpg(bpg_x,bpg_y);
 	cublasMath_t mode = CUBLAS_TENSOR_OP_MATH;
@@ -178,8 +167,6 @@ int main(void)
 	cublasSetMathMode(handle, mode);
     cublasSetPointerMode(handle, mode_pt);
 
-	cudaEventRecord(start,0);
-	cudaMallocManaged(&A, N*N*N*N*sizeof(double));
 	cudaMallocManaged(&field, size_lattice);
 	cudaMallocManaged(&r, size_lattice);
 	cudaMallocManaged(&r_prime, size_lattice);
@@ -188,80 +175,71 @@ int main(void)
 	cudaMallocManaged(&field_analytic, size_lattice);
 	cudaMallocManaged(&rho, size_lattice);
 	cudaMallocManaged(&error_block, N_block*sizeof(double));
-	cudaMemset(A, 0, N*N*N*N*sizeof(double));
+	cudaMallocManaged(&coeff, 3*size_lattice);
 
-	INITIALIZE<<<bpg,tpb>>>(N, dx, photon_mass, rho, field, field_analytic, A);
+	PRODUCE_CHOLESKY(N, row, dx, photon_mass, coeff);
+	INITIALIZE<<<bpg,tpb>>>(N, dx, rho, field, field_analytic);
 	EVALUATE_ERROR_BLOCK<<<bpg,tpb,size_sm>>>(N, rho, field, error_block);
 
-//	FILE* output_test = fopen("Matrix_A.txt","w");
-//	FPRINTF(output_test, N*N, 1., A);
+	double norm;
+	cublasDdot(handle, N*N, rho, 1, rho, 1, &norm);
+	norm = sqrt(norm);
+	
+	cudaDeviceSynchronize();
+	cudaMemcpy(r, rho, size_lattice, cudaMemcpyDeviceToDevice);
+	
+	FPRINTF(output_field, N, 1., field_analytic);
+	FPRINTF(output_rho, N, -pow(dx,-2.), rho);
+	cudaEventRecord(start,0);
 
-//    /* use the lapack function */
-	char type = 'L';
-	int row = N*N;
-	int status;
-    dpotrf_(&type, &row, A, &row, &status);	
-	cudaFree(A);
-//
-//	double norm;
-//	cublasDdot(handle, N*N, rho, 1, rho, 1, &norm);
-//	norm = sqrt(norm);
-//	
-//	cudaDeviceSynchronize();
-//	cudaMemcpy(r, rho, size_lattice, cudaMemcpyDeviceToDevice);
-//	
-//	FPRINTF(output_field, N, 1., field_analytic);
-//	FPRINTF(output_rho, N, -pow(dx,-2.), rho);
-//	cudaEventRecord(start,0);
-//
-//	printf("Preparation ends.\n");
-//	cudaEventRecord(stop,0);
-//	cudaEventSynchronize(stop);
-//	cudaEventElapsedTime(&preparation_time, start, stop);
-//	printf("Total preparation time is %.4f ms.\n\n", preparation_time);
-//
-//	cudaEventRecord(start,0);	
-//	double error = EVALUATE_ERROR(N, N_block, error_block); 
-//	double temp;
-//
-//	printf("Starts computation with error = %.8e...\n", sqrt(error)/norm);
-//	iter = 0;
-//	PRE_CONDITION_SSOR(N, dx, photon_mass, omega, r, r_prime);
-//
-////	for (int i=0; i<N*N; i++)
-////		printf("%.4f\n", r_prime[i]);
-//
-//	cudaMemcpy(p, r_prime, size_lattice, cudaMemcpyDeviceToDevice);
-//	
-//	while (sqrt(error)/norm>criteria&&iter<iter_max)
-//	{
-//		LAPLACIAN<<<bpg,tpb>>>(N, dx, photon_mass, p, A_p);
-//		cublasDdot(handle, N*N, p, 1, A_p, 1, &temp);
-//		cublasDdot(handle, N*N, r, 1, r_prime, 1, &beta);
-//		alpha = beta/temp;
-//		temp = -alpha;
-//		cublasDaxpy(handle, N*N, &temp, A_p, 1, r, 1);
-//		cublasDaxpy(handle, N*N, &alpha, p, 1, field, 1);
-//		cudaDeviceSynchronize();
-//		PRE_CONDITION_SSOR(N, dx, photon_mass, omega, r, r_prime);
-//		cublasDdot(handle, N*N, r, 1, r_prime, 1, &temp);
-//		beta = temp/beta;
-////		printf("%.4f\t%.4f\n", alpha, beta);
-//		DAXPY<<<bpg,tpb>>>(N, beta, p, r_prime);
-//		cublasDdot(handle, N*N, r, 1, r, 1, &error);
-//		iter += 1;
-//		if (iter%display_interval==0)
-//			printf("Iteration = %ld , error = %.8e .\n", iter, sqrt(error)/norm);
-//	}
-//  
-//	output_field = fopen("simulated_field_distribution_GPU_CG_precondition_SSOR.txt","w");
-//	FPRINTF(output_field, N, 1., field);
-//	cudaEventRecord(stop,0);
-//	cudaEventSynchronize(stop);
-//	cudaEventElapsedTime(&computation_time, start, stop);
-//	printf("Computation time is %.4f ms.\n", computation_time);
-//	total_time = preparation_time + computation_time;
-//	printf("Total iteration is %ld ; total time is %.4f ms.\n", iter, total_time);
+	printf("Preparation ends.\n");
+	cudaEventRecord(stop,0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&preparation_time, start, stop);
+	printf("Total preparation time is %.4f ms.\n\n", preparation_time);
+
+	cudaEventRecord(start,0);	
+	double error = EVALUATE_ERROR(N, N_block, error_block); 
+	double temp;
+
+	printf("Starts computation with error = %.8e...\n", sqrt(error)/norm);
+	iter = 0;
+	PRE_CONDITION_IC(N, dx, photon_mass, coeff, r, r_prime);
+
+//	for (int i=0; i<N*N; i++)
+//		printf("%.4f\n", r_prime[i]);
+
+	cudaMemcpy(p, r_prime, size_lattice, cudaMemcpyDeviceToDevice);
+	
+	while (sqrt(error)/norm>criteria&&iter<iter_max)
+	{
+		LAPLACIAN<<<bpg,tpb>>>(N, dx, photon_mass, p, A_p);
+		cublasDdot(handle, N*N, p, 1, A_p, 1, &temp);
+		cublasDdot(handle, N*N, r, 1, r_prime, 1, &beta);
+		alpha = beta/temp;
+		temp = -alpha;
+		cublasDaxpy(handle, N*N, &temp, A_p, 1, r, 1);
+		cublasDaxpy(handle, N*N, &alpha, p, 1, field, 1);
+		cudaDeviceSynchronize();
+		PRE_CONDITION_IC(N, dx, photon_mass, coeff, r, r_prime);
+		cublasDdot(handle, N*N, r, 1, r_prime, 1, &temp);
+		beta = temp/beta;
+//		printf("%.4f\t%.4f\n", alpha, beta);
+		DAXPY<<<bpg,tpb>>>(N, beta, p, r_prime);
+		cublasDdot(handle, N*N, r, 1, r, 1, &error);
+		iter += 1;
+		if (iter%display_interval==0)
+			printf("Iteration = %ld , error = %.8e .\n", iter, sqrt(error)/norm);
+	}
+  
+	output_field = fopen("simulated_field_distribution_GPU_CG_precondition_CHOLESKY.txt","w");
+	FPRINTF(output_field, N, 1., field);
+	cudaEventRecord(stop,0);
+	cudaEventSynchronize(stop);
+	cudaEventElapsedTime(&computation_time, start, stop);
+	printf("Computation time is %.4f ms.\n", computation_time);
+	total_time = preparation_time + computation_time;
+	printf("Total iteration is %ld ; total time is %.4f ms.\n", iter, total_time);
 
 	cudaFree(field);
 	cudaFree(r);
@@ -271,6 +249,7 @@ int main(void)
 	cudaFree(field_analytic);
 	cudaFree(rho);
 	cudaFree(error_block);
+	cudaFree(coeff);
 	cublasDestroy(handle);
 	fclose(output_field);
 	fclose(output_rho);
@@ -285,9 +264,9 @@ double EVALUATE_ERROR(int N, int N_block, double* error_block)
 	return error;
 }
 
-void PRE_CONDITION_SSOR(int N, double dx, double photon_mass, double omega, double* r, double* r_prime)
+void PRE_CONDITION_IC(int N, double dx, double photon_mass,double* R, double* r, double* r_prime)
 {
-    double *temp = (double*)calloc(N*N, sizeof(double));
+	double *temp = (double*)calloc(N*N, sizeof(double));
     for (int idx=0; idx<N*N; idx++)
     {
         int idx_x = idx%N;
@@ -295,38 +274,85 @@ void PRE_CONDITION_SSOR(int N, double dx, double photon_mass, double omega, doub
         if ( idx_x!=0 && idx_x!=N-1 && idx_y!=0 && idx_y!=N-1 )
 		{
 			if (idx_x>1&&idx_y>1)
-				temp[idx] = -omega*((2.-omega)*r[idx]-(temp[idx-1]+temp[idx-N]))/(4.-pow(photon_mass*dx,2.));
+				temp[idx] = (r[idx]-(R[3*(idx-1)+1]*temp[idx-1]+R[3*(idx-N)+2]*temp[idx-N]))/R[3*idx];
 			else if (idx_x>1)
-				temp[idx] = -omega*((2.-omega)*r[idx]-temp[idx-1])/(4.-pow(photon_mass*dx,2.));
+				temp[idx] = (r[idx]-R[3*(idx-1)+1]*temp[idx-1])/R[3*idx];
 			else if (idx_y>1)
-				temp[idx] = -omega*((2.-omega)*r[idx]-temp[idx-N])/(4.-pow(photon_mass*dx,2.));
+				temp[idx] = (r[idx]-R[3*(idx-N)+2]*temp[idx-N])/R[3*idx];
 			else
-				temp[idx] = -omega*(2.-omega)*r[idx]/(4.-pow(photon_mass*dx,2.));
+				temp[idx] = r[idx]/R[3*idx];
 		}
         else
-            temp[idx] = omega*(2.-omega)*r[idx];
-//      printf("temp[%d]\t%.8f\n", idx, temp[idx]);
-    }                                                                  
-    for (int idx=N*N-1; idx>=0; idx--)
-    {
+            temp[idx] = r[idx];
+    }                                                                     
+	for (int idx=N*N-1; idx>=0; idx--)
+	{
         int idx_x = idx%N;
         int idx_y = idx/N;
         if ( idx_x!=0 && idx_x!=N-1 && idx_y!=0 && idx_y!=N-1 )
-        {
-            temp[idx] *= pow(photon_mass*dx,2.) - 4.;
+		{
 			if (idx_x<N-2&&idx_y<N-2)
-				r_prime[idx] = -(temp[idx]-omega*(r_prime[idx+1]+r_prime[idx+N]))/(4.-pow(photon_mass*dx,2.));
+				r_prime[idx] = (temp[idx]-(R[3*idx+1]*r_prime[idx+1]+R[3*idx+2]*r_prime[idx+N]))/R[3*idx];
 			else if (idx_x<N-2)
-				r_prime[idx] = -(temp[idx]-omega*r_prime[idx+1])/(4.-pow(photon_mass*dx,2.));
+				r_prime[idx] = (temp[idx]-R[3*idx+1]*r_prime[idx+1])/R[3*idx];
 			else if (idx_y<N-2)
-				r_prime[idx] = -(temp[idx]-omega*r_prime[idx+N])/(4.-pow(photon_mass*dx,2.));
+				r_prime[idx] = (temp[idx]-R[3*idx+2]*r_prime[idx+N])/R[3*idx];	
 			else
-				r_prime[idx] = -temp[idx]/(4.-pow(photon_mass*dx,2.));
-        }
+				r_prime[idx] = temp[idx]/R[3*idx];
+		}
         else
             r_prime[idx] = temp[idx];
-    }
-    free(temp);
+	}
+	free(temp);
+}
+
+void PRODUCE_CHOLESKY(int N, int row, double dx, double photon_mass, double* R)
+{
+	int idx_x, idx_y;
+	double temp;
+
+	for (int idx=0; idx<N+1; idx++)
+		R[3*idx] = 1.0;	//diagonal
+	for (int idx=N+1; idx<row-N-1; idx++)
+	{
+		idx_x = idx%N;
+		idx_y = idx/N;
+		
+		if (idx_x!=0&&idx_x!=N-1&&idx_y!=0&&idx_y!=N-1)
+		{
+			R[3*idx] = (4.+pow(photon_mass*dx,2.));
+			if (idx_x<N-2)
+				R[3*idx+1] = -1.;
+			if (idx_y<N-2)
+				R[3*idx+2] = -1.;
+		}
+		else
+			R[3*idx] = 1.0;
+	}
+	for (int idx=row-N-1; idx<row; idx++)
+		R[3*idx] = 1.0;
+
+	for (int idx=N+1; idx<row-N-1; idx++)
+	{
+		idx_x = idx%N;
+		idx_y = idx/N;
+		
+		if (idx_x!=0&&idx_x!=N-1&&idx_y!=0&&idx_y!=N-1)
+		{
+			temp = sqrt(R[3*idx]);
+			R[3*idx] = temp;
+			if (idx_x<N-2)
+			{
+				R[3*idx+1] /= temp;
+				R[3*idx+3] -= pow(R[3*idx+1],2.);
+			}
+			if (idx_y<N-2)
+			{
+				R[3*idx+2] /= temp;
+				R[3*(idx+N)] -= pow(R[3*idx+2],2.);
+			}
+		}
+	}
 }
 
 void FPRINTF(FILE *output_file, int N, double scale, double *array)
@@ -334,8 +360,7 @@ void FPRINTF(FILE *output_file, int N, double scale, double *array)
 	for (int j=0; j<N; j++)
 	{
 		for (int i=0; i<N; i++)
-			fprintf(output_file, "%.4f\t", scale*array[i+j*N]);
-//			fprintf(output_file, "%.8e\t", scale*array[i+j*N]);
+			fprintf(output_file, "%.8e\t", scale*array[i+j*N]);
 		fprintf(output_file, "\n");
 	}
 }

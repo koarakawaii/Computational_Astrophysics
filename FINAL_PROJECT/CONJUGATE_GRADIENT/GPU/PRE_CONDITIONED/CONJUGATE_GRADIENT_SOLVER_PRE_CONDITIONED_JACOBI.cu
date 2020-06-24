@@ -77,7 +77,7 @@ __global__ void LAPLACIAN(int N, double dx, double photon_mass, double* p, doubl
 		int U = idx_x + (idx_y+1)*N;
 		int D = idx_x + (idx_y-1)*N;
 
-		A_p[idx] = (p[L]+p[R]+p[U]+p[D]-(4.-pow(photon_mass*dx,2.))*p[idx]);
+		A_p[idx] = (p[L]+p[R]+p[U]+p[D]-(4.+pow(photon_mass*dx,2.))*p[idx]);
 //		printf("%d\t%.4f\n", idx, A_p[idx]);
 	}
 	else
@@ -91,7 +91,7 @@ __global__ void PRECONDITION(int N, double dx, double photon_mass, double* r, do
 	int idx = idx_x + N*idx_y;
 	
 	if (idx_x!=0&&idx_x!=N-1&&idx_y!=0&&idx_y!=N-1)
-		r_prime[idx] = -r[idx]/(4.-pow(photon_mass*dx,2.));
+		r_prime[idx] = -r[idx]/(4.+pow(photon_mass*dx,2.));
 	else
 		r_prime[idx] = r[idx];
 }

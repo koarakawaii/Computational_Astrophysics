@@ -303,7 +303,7 @@ void LAPLACIAN(int N_per_rank, int N, int shift, int my_rank, double dx, double 
 			else
 				D = neighbor_D[idx_x];
 	
-			A_p[idx] = ( L + R + U + D - (4.-pow(photon_mass*dx,2.))*p[idx]);
+			A_p[idx] = ( L + R + U + D - (4.+pow(photon_mass*dx,2.))*p[idx]);
 	//		printf("%d\t%.4f\n", idx, A_p[idx]);
 		}
 		else

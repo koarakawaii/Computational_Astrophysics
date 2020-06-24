@@ -90,11 +90,6 @@ int main(void)
 	FILL_MATRIX<<<bpg,tpb>>>(N, dx, photon_mass, A);
 	cudaDeviceSynchronize();
 
-//	FILE* output = fopen("Matrix_A_GPU.txt", "w");
-//	PRINT_MATRIX(row, A);
-//	FPRINTF(output, row, 1.0, A);
-//	fclose(output);
-
 	cudaMemcpy(A_copy, A, row*row*sizeof(double), cudaMemcpyDeviceToDevice);
 	cusolverDnDpotrf_bufferSize(solver_handle, uplo, row, A_copy, row, &work_size);
 	double* work;

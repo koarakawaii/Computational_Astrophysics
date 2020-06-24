@@ -31,7 +31,7 @@ int main(void)
 	x_prime = malloc(N*N*sizeof(double));
 	x_prime_sol = malloc(N*N*sizeof(double));
 	srand(time(NULL));
-	output = fopen("x_prime.txt","w");
+	output = fopen("x_prime_SSOR.txt","w");
 	
 	for (int i=0; i<N*N; i++)
 		x_prime[i] = (double)(rand())/(double)(RAND_MAX);

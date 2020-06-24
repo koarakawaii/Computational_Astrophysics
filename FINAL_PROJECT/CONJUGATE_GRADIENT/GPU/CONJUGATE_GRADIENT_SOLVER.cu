@@ -75,7 +75,7 @@ __global__ void LAPLACIAN(int N, double dx, double photon_mass, double* p, doubl
 		int U = idx_x + (idx_y+1)*N;
 		int D = idx_x + (idx_y-1)*N;
 
-		A_p[idx] = (p[L]+p[R]+p[U]+p[D]-(4.-pow(photon_mass*dx,2.))*p[idx]);
+		A_p[idx] = (p[L]+p[R]+p[U]+p[D]-(4.+pow(photon_mass*dx,2.))*p[idx]);
 //		printf("%d\t%.4f\n", idx, A_p[idx]);
 	}
 	else

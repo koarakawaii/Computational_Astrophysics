@@ -78,7 +78,7 @@ __global__ void LAPLACIAN(int N, double dx, double photon_mass, double* p, doubl
 		int U = idx_x + (idx_y+1)*N;
 		int D = idx_x + (idx_y-1)*N;
 
-		A_p[idx] = (p[L]+p[R]+p[U]+p[D]-(4.-pow(photon_mass*dx,2.))*p[idx]);
+		A_p[idx] = (p[L]+p[R]+p[U]+p[D]-(4.+pow(photon_mass*dx,2.))*p[idx]);
 //		printf("%d\t%.4f\n", idx, A_p[idx]);
 	}
 	else
@@ -271,13 +271,13 @@ void PRE_CONDITION_SSOR(int N, double dx, double photon_mass, double omega, doub
         if ( idx_x!=0 && idx_x!=N-1 && idx_y!=0 && idx_y!=N-1 )
 		{
 			if (idx_x>1&&idx_y>1)
-				temp[idx] = -omega*((2.-omega)*r[idx]-(temp[idx-1]+temp[idx-N]))/(4.-pow(photon_mass*dx,2.));
+				temp[idx] = -omega*((2.-omega)*r[idx]-(temp[idx-1]+temp[idx-N]))/(4.+pow(photon_mass*dx,2.));
 			else if (idx_x>1)
-				temp[idx] = -omega*((2.-omega)*r[idx]-temp[idx-1])/(4.-pow(photon_mass*dx,2.));
+				temp[idx] = -omega*((2.-omega)*r[idx]-temp[idx-1])/(4.+pow(photon_mass*dx,2.));
 			else if (idx_y>1)
-				temp[idx] = -omega*((2.-omega)*r[idx]-temp[idx-N])/(4.-pow(photon_mass*dx,2.));
+				temp[idx] = -omega*((2.-omega)*r[idx]-temp[idx-N])/(4.+pow(photon_mass*dx,2.));
 			else
-				temp[idx] = -omega*(2.-omega)*r[idx]/(4.-pow(photon_mass*dx,2.));
+				temp[idx] = -omega*(2.-omega)*r[idx]/(4.+pow(photon_mass*dx,2.));
 		}
         else
             temp[idx] = omega*(2.-omega)*r[idx];
@@ -291,13 +291,13 @@ void PRE_CONDITION_SSOR(int N, double dx, double photon_mass, double omega, doub
         {
             temp[idx] *= pow(photon_mass*dx,2.) - 4.;
 			if (idx_x<N-2&&idx_y<N-2)
-				r_prime[idx] = -(temp[idx]-omega*(r_prime[idx+1]+r_prime[idx+N]))/(4.-pow(photon_mass*dx,2.));
+				r_prime[idx] = -(temp[idx]-omega*(r_prime[idx+1]+r_prime[idx+N]))/(4.+pow(photon_mass*dx,2.));
 			else if (idx_x<N-2)
-				r_prime[idx] = -(temp[idx]-omega*r_prime[idx+1])/(4.-pow(photon_mass*dx,2.));
+				r_prime[idx] = -(temp[idx]-omega*r_prime[idx+1])/(4.+pow(photon_mass*dx,2.));
 			else if (idx_y<N-2)
-				r_prime[idx] = -(temp[idx]-omega*r_prime[idx+N])/(4.-pow(photon_mass*dx,2.));
+				r_prime[idx] = -(temp[idx]-omega*r_prime[idx+N])/(4.+pow(photon_mass*dx,2.));
 			else
-				r_prime[idx] = -temp[idx]/(4.-pow(photon_mass*dx,2.));
+				r_prime[idx] = -temp[idx]/(4.+pow(photon_mass*dx,2.));
         }
         else
             r_prime[idx] = temp[idx];
