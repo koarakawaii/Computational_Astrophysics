@@ -147,6 +147,11 @@ int main(void)
 	printf("\n");
 
 	printf("Start Preparation...\n");
+	cudaSetDevice(0);
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+	cudaEventRecord(start,0);
+
 	dx = 1./(N-1);	
 	N_block = bpg_x*bpg_y;
 	size_lattice = N*N*sizeof(double);
@@ -154,9 +159,6 @@ int main(void)
 	output_field = fopen("analytical_field_distribution_CG_precondition_SSOR.txt","w");
 	output_rho = fopen("charge_distribution_CG_precondition_SSOR.txt","w");
 
-	cudaSetDevice(0);
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
 	dim3 tpb(tpb_x,tpb_y);
 	dim3 bpg(bpg_x,bpg_y);
 	cublasMath_t mode = CUBLAS_TENSOR_OP_MATH;
@@ -188,7 +190,6 @@ int main(void)
 	
 	FPRINTF(output_field, N, 1., field_analytic);
 	FPRINTF(output_rho, N, pow(dx,-2.), rho);
-	cudaEventRecord(start,0);
 
 	printf("Preparation ends.\n");
 	cudaEventRecord(stop,0);
@@ -263,46 +264,40 @@ double EVALUATE_ERROR(int N, int N_block, double* error_block)
 
 void PRE_CONDITION_SSOR(int N, double dx, double photon_mass, double omega, double* r, double* r_prime)
 {
-    double *temp = (double*)calloc(N*N, sizeof(double));
     for (int idx=0; idx<N*N; idx++)
     {
         int idx_x = idx%N;
         int idx_y = idx/N;
+        r_prime[idx] = r[idx]*omega*(2.-omega);
         if ( idx_x!=0 && idx_x!=N-1 && idx_y!=0 && idx_y!=N-1 )
-		{
-			if (idx_x>1&&idx_y>1)
-				temp[idx] = -omega*((2.-omega)*r[idx]-(temp[idx-1]+temp[idx-N]))/(4.+pow(photon_mass*dx,2.));
-			else if (idx_x>1)
-				temp[idx] = -omega*((2.-omega)*r[idx]-temp[idx-1])/(4.+pow(photon_mass*dx,2.));
-			else if (idx_y>1)
-				temp[idx] = -omega*((2.-omega)*r[idx]-temp[idx-N])/(4.+pow(photon_mass*dx,2.));
-			else
-				temp[idx] = -omega*(2.-omega)*r[idx]/(4.+pow(photon_mass*dx,2.));
-		}
-        else
-            temp[idx] = omega*(2.-omega)*r[idx];
-//      printf("temp[%d]\t%.8f\n", idx, temp[idx]);
-    }                                                                  
+        {
+            if (idx_x>1&&idx_y>1)
+                r_prime[idx] = (-r_prime[idx]+omega*(r_prime[idx-1]+r_prime[idx-N]))/(4.-pow(photon_mass*dx,2.));
+            else if (idx_x>1)
+                r_prime[idx] = (-r_prime[idx]+omega*r_prime[idx-1])/(4.-pow(photon_mass*dx,2.));
+            else if (idx_y>1)
+                r_prime[idx] = (-r_prime[idx]+omega*r_prime[idx-N])/(4.-pow(photon_mass*dx,2.));
+            else
+                r_prime[idx] = -r_prime[idx]/(4.-pow(photon_mass*dx,2.));
+        }
+    }
     for (int idx=N*N-1; idx>=0; idx--)
     {
         int idx_x = idx%N;
         int idx_y = idx/N;
         if ( idx_x!=0 && idx_x!=N-1 && idx_y!=0 && idx_y!=N-1 )
         {
-            temp[idx] *= pow(photon_mass*dx,2.) - 4.;
-			if (idx_x<N-2&&idx_y<N-2)
-				r_prime[idx] = -(temp[idx]-omega*(r_prime[idx+1]+r_prime[idx+N]))/(4.+pow(photon_mass*dx,2.));
-			else if (idx_x<N-2)
-				r_prime[idx] = -(temp[idx]-omega*r_prime[idx+1])/(4.+pow(photon_mass*dx,2.));
-			else if (idx_y<N-2)
-				r_prime[idx] = -(temp[idx]-omega*r_prime[idx+N])/(4.+pow(photon_mass*dx,2.));
-			else
-				r_prime[idx] = -temp[idx]/(4.+pow(photon_mass*dx,2.));
+            r_prime[idx] *= pow(photon_mass*dx,2.) - 4.;
+            if (idx_x<N-2&&idx_y<N-2)
+                r_prime[idx] = -(r_prime[idx]-omega*(r_prime[idx+1]+r_prime[idx+N]))/(4.-pow(photon_mass*dx,2.));
+            else if (idx_x<N-2)
+                r_prime[idx] = -(r_prime[idx]-omega*r_prime[idx+1])/(4.-pow(photon_mass*dx,2.));
+            else if (idx_y<N-2)
+                r_prime[idx] = -(r_prime[idx]-omega*r_prime[idx+N])/(4.-pow(photon_mass*dx,2.));
+            else
+                r_prime[idx] = -r_prime[idx]/(4.-pow(photon_mass*dx,2.));
         }
-        else
-            r_prime[idx] = temp[idx];
     }
-    free(temp);
 }
 
 void FPRINTF(FILE *output_file, int N, double scale, double *array)

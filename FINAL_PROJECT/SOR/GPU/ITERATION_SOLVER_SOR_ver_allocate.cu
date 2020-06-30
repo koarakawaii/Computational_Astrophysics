@@ -362,7 +362,6 @@ int main(void)
 
 	FPRINTF(output_field, N, field_analytic);
 	FPRINTF(output_rho, N, rho);
-	cudaEventRecord(start,0);
 
 	printf("Preparation ends.\n");
 	cudaEventRecord(stop,0);

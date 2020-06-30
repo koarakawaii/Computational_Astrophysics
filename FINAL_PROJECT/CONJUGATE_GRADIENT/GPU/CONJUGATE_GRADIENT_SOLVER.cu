@@ -141,6 +141,11 @@ int main(void)
 	printf("\n");
 
 	printf("Start Preparation...\n");
+	cudaSetDevice(0);
+	cudaEventCreate(&start);
+	cudaEventCreate(&stop);
+	cudaEventRecord(start,0);
+
 	dx = 1./(N-1);	
 	N_block = bpg_x*bpg_y;
 	size_lattice = N*N*sizeof(double);
@@ -148,9 +153,6 @@ int main(void)
 	output_field = fopen("analytical_field_distribution_CG.txt","w");
 	output_rho = fopen("charge_distribution_CG.txt","w");
 
-	cudaSetDevice(0);
-	cudaEventCreate(&start);
-	cudaEventCreate(&stop);
 	dim3 tpb(tpb_x,tpb_y);
 	dim3 bpg(bpg_x,bpg_y);
 	cublasMath_t mode = CUBLAS_TENSOR_OP_MATH;
@@ -161,7 +163,6 @@ int main(void)
 	cublasSetMathMode(handle, mode);
     cublasSetPointerMode(handle, mode_pt);
 
-	cudaEventRecord(start,0);
 	cudaMallocManaged(&field, size_lattice);
 	cudaMallocManaged(&r, size_lattice);
 	cudaMallocManaged(&p, size_lattice);
@@ -182,7 +183,6 @@ int main(void)
 	
 	FPRINTF(output_field, N, 1., field_analytic);
 	FPRINTF(output_rho, N, pow(dx,-2.), rho);
-	cudaEventRecord(start,0);
 
 	printf("Preparation ends.\n");
 	cudaEventRecord(stop,0);

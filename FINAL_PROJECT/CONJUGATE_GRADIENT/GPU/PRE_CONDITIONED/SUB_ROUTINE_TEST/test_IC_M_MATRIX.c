@@ -107,7 +107,6 @@ int main(void)
 
 void PRE_CONDITION_IC(int N, double dx, double photon_mass,double* R, double* r, double* r_prime)
 {
-	double *temp = calloc(N*N, sizeof(double));
     for (int idx=0; idx<N*N; idx++)
     {
         int idx_x = idx%N;
@@ -115,17 +114,17 @@ void PRE_CONDITION_IC(int N, double dx, double photon_mass,double* R, double* r,
         if ( idx_x!=0 && idx_x!=N-1 && idx_y!=0 && idx_y!=N-1 )
 		{
 			if (idx_x>1&&idx_y>1)
-				temp[idx] = (r[idx]-(R[3*(idx-1)+1]*temp[idx-1]+R[3*(idx-N)+2]*temp[idx-N]))/R[3*idx];
+				r_prime[idx] = (r[idx]-(R[3*(idx-1)+1]*r_prime[idx-1]+R[3*(idx-N)+2]*r_prime[idx-N]))/R[3*idx];
 			else if (idx_x>1)
-				temp[idx] = (r[idx]-R[3*(idx-1)+1]*temp[idx-1])/R[3*idx];
+				r_prime[idx] = (r[idx]-R[3*(idx-1)+1]*r_prime[idx-1])/R[3*idx];
 			else if (idx_y>1)
-				temp[idx] = (r[idx]-R[3*(idx-N)+2]*temp[idx-N])/R[3*idx];
+				r_prime[idx] = (r[idx]-R[3*(idx-N)+2]*r_prime[idx-N])/R[3*idx];
 			else
-				temp[idx] = r[idx]/R[3*idx];
+				r_prime[idx] = r[idx]/R[3*idx];
 		}
         else
-            temp[idx] = r[idx];
-//		printf("temp[%d]\t%.8f\n", idx, temp[idx]);
+            r_prime[idx] = r[idx];
+//		printf("r_prime[%d]\t%.8f\n", idx, r_prime[idx]);
     }                                                                     
 	for (int idx=N*N-1; idx>=0; idx--)
 	{
@@ -134,18 +133,15 @@ void PRE_CONDITION_IC(int N, double dx, double photon_mass,double* R, double* r,
         if ( idx_x!=0 && idx_x!=N-1 && idx_y!=0 && idx_y!=N-1 )
 		{
 			if (idx_x<N-2&&idx_y<N-2)
-				r_prime[idx] = (temp[idx]-(R[3*idx+1]*r_prime[idx+1]+R[3*idx+2]*r_prime[idx+N]))/R[3*idx];
+				r_prime[idx] = (r_prime[idx]-(R[3*idx+1]*r_prime[idx+1]+R[3*idx+2]*r_prime[idx+N]))/R[3*idx];
 			else if (idx_x<N-2)
-				r_prime[idx] = (temp[idx]-R[3*idx+1]*r_prime[idx+1])/R[3*idx];
+				r_prime[idx] = (r_prime[idx]-R[3*idx+1]*r_prime[idx+1])/R[3*idx];
 			else if (idx_y<N-2)
-				r_prime[idx] = (temp[idx]-R[3*idx+2]*r_prime[idx+N])/R[3*idx];	
+				r_prime[idx] = (r_prime[idx]-R[3*idx+2]*r_prime[idx+N])/R[3*idx];	
 			else
-				r_prime[idx] = temp[idx]/R[3*idx];
+				r_prime[idx] = r_prime[idx]/R[3*idx];
 		}
-        else
-            r_prime[idx] = temp[idx];
 	}
-	free(temp);
 }
 
 void PRODUCE_CHOLESKY(int N, int row, double dx, double photon_mass, double* R)

@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
 
 	if (my_rank==root_rank)
 	{
-		printf("Solve the Poission problem using SOR by OpenMP.\n");
+		printf("Solve the Poission problem using SOR by MPI.\n");
 		printf("Enter the latttice size (N,N) (N must be divisible by N_rank).\n");
 		scanf("%d", &N);
 		if (N%(N_rank)!=0)

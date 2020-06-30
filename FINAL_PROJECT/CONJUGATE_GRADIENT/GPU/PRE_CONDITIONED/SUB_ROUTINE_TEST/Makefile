@@ -13,7 +13,7 @@ FILE_CHOLESKY_CPU := cholesky_factorization_CPU.c
 FILE_CHOLESKY_GPU := cholesky_factorization_GPU.cu
 FILE_CG_TEST	:= CONJUGATE_GRADIENT_SOLVER_TEST.cu 
 FILE_INCOMPLETE_CHOLESKY_CPU := incomplete_cholesky_factorization_CPU.c
-LIB     := -lgsl -lgslcblas -llapack -lm -lcublas -lcurand -lcusolver
+LIB     := -lgsl -lgslcblas -llapack -lm -lcublas -lcurand -lcusolver -fopenmp
 
 all: $(BIN)
 

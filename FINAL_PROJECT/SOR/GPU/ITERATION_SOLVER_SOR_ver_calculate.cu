@@ -25,6 +25,8 @@ __global__ void INITIALIZE(int N, double dx, double* rho_even, double* rho_odd, 
 	double y_e = site_y_e*dx;
 	idx_site_e = site_x_e + N*site_y_e;
 
+	double field_analytic_e, field_analytic_o, rho_e, rho_o;
+
 	int site_x_o = (2*idx)%N;		
 	int site_y_o = (2*idx)/N;
 	int parity_o = (site_x_o+site_y_o+1)%2;
@@ -33,47 +35,57 @@ __global__ void INITIALIZE(int N, double dx, double* rho_even, double* rho_odd, 
 	double y_o = site_y_o*dx;
 	idx_site_o = site_x_o + N*site_y_o;
 	
-	field_analytic[idx_site_e] = x_e*(1.-x_e)*y_e*(1.-y_e)*exp(x_e-y_e);
+	field_analytic_e = x_e*(1.-x_e)*y_e*(1.-y_e)*exp(x_e-y_e);
+	field_analytic[idx_site_e] = field_analytic_e;
 
 	if ( site_x_e==0 || site_x_e==N-1 || site_y_e==0 || site_y_e==N-1 )
 	{
-		field_even[idx] = field_analytic[idx_site_e];
+		field_even[idx] = field_analytic_e;
 		rho[idx_site_e] = 0.0;
 		rho_even[idx] = 0.0;
 	}
 	else
 	{
 		field_even[idx] = 0.0;
-		rho[idx_site_e] = 2.*x_e*(y_e-1)*(y_e-2.*x_e+x_e*y_e+2)*exp(x_e-y_e);
-		rho_even[idx] = rho[idx_site_e];
+		rho_e = 2.*x_e*(y_e-1)*(y_e-2.*x_e+x_e*y_e+2)*exp(x_e-y_e);
+		rho[idx_site_e] = rho_e;
+		rho_even[idx] = rho_e;
 //		field_even[idx] = field_analytic[idx_site_o];
 	}
 	
-	field_analytic[idx_site_o] = x_o*(1.-x_o)*y_o*(1.-y_o)*exp(x_o-y_o);
+	field_analytic_o = x_o*(1.-x_o)*y_o*(1.-y_o)*exp(x_o-y_o);
+	field_analytic[idx_site_o] = field_analytic_o;
 
 	if ( site_x_o==0 || site_x_o==N-1 || site_y_o==0 || site_y_o==N-1 )
 	{
-		field_odd[idx] = field_analytic[idx_site_o];
+		field_odd[idx] = field_analytic_o;
 		rho[idx_site_o]= 0.0;
 		rho_odd[idx] = 0.0;
 	}
 	else
 	{
 		field_odd[idx] = 0.0;
-		rho[idx_site_o]= 2.*x_o*(y_o-1)*(y_o-2.*x_o+x_o*y_o+2)*exp(x_o-y_o);
-		rho_odd[idx] = rho[idx_site_o];
+		rho_o = 2.*x_o*(y_o-1)*(y_o-2.*x_o+x_o*y_o+2)*exp(x_o-y_o);
+		rho[idx_site_o] = rho_o;
+		rho_odd[idx] = rho_o;
 //		field_odd[idx] = field_analytic[idx_site_o];
 	}
 }
 
 __global__ void SOR_SOLVER_EVEN(int N, double dx, double omega, double* field_even, double* field_odd, double* rho_even)
 {
+	extern __shared__ double sm[];
 	int idx_x = threadIdx.x + blockIdx.x*blockDim.x;
 	int idx_y = threadIdx.y + blockIdx.y*blockDim.y;
 	int idx = idx_x + idx_y*N/2;
+	int idx_sm = threadIdx.x + blockDim.x*threadIdx.y;
 
 	int site_x = idx%(N/2);		
 	int site_y = idx/(N/2);
+	double f_L, f_R, f_U, f_D;
+
+	sm[idx_sm] = field_odd[idx];
+	__syncthreads();
 
 	if ( (idx>N/2-1)&&(idx<(N*N)/2-N/2))
 	{
@@ -81,24 +93,54 @@ __global__ void SOR_SOLVER_EVEN(int N, double dx, double omega, double* field_ev
 		{
 			if (site_x!=0)
 			{
-				int L = site_x-1 + site_y*(N/2);
-				int R = idx;	
-				int D = site_x + (site_y-1)*(N/2);
-				int U = site_x + (site_y+1)*(N/2);
-
-				field_even[idx] += 0.25*omega*( field_odd[L] + field_odd[R] + field_odd[U] + field_odd[D] - dx*dx*rho_even[idx] - 4.*field_even[idx]);
+				f_R = sm[idx_sm];
+				if (threadIdx.x>0)
+					f_L = sm[idx_sm-1];
+				else
+					f_L = field_odd[idx-1];
+				if (threadIdx.y==0)
+				{
+					f_D = field_odd[idx-N/2];
+					f_U = sm[idx_sm+blockDim.x];
+				}
+				else if (threadIdx.y==blockDim.y-1)
+				{
+					f_D = sm[idx_sm-blockDim.x];
+					f_U = field_odd[idx+N/2];
+				}
+				else
+				{
+					f_D = sm[idx_sm-blockDim.x];
+					f_U = sm[idx_sm+blockDim.x];
+				}
+				field_even[idx] += 0.25*omega*( f_L + f_R + f_U + f_D - dx*dx*rho_even[idx] - 4.*field_even[idx]);
 			}
 		}		
 		else
 		{
 			if (site_x!=(N/2)-1)
 			{
-				int L = idx;
-				int R = site_x+1 + site_y*(N/2);	
-				int D = site_x + (site_y-1)*(N/2);
-				int U = site_x + (site_y+1)*(N/2);
-
-				field_even[idx] += 0.25*omega*( field_odd[L] + field_odd[R] + field_odd[U] + field_odd[D] - dx*dx*rho_even[idx] - 4.*field_even[idx]);
+				f_L = sm[idx_sm];
+				if (threadIdx.x<blockDim.x-1)
+					f_R = sm[idx_sm+1];
+				else
+					f_R = field_odd[idx+1];
+				if (threadIdx.y==0)
+				{
+					f_D = field_odd[idx-N/2];
+					f_U = sm[idx_sm+blockDim.x];
+				}
+				else if (threadIdx.y==blockDim.y-1)
+				{
+					f_D = sm[idx_sm-blockDim.x];
+					f_U = field_odd[idx+N/2];
+				}
+				else
+				{
+					f_D = sm[idx_sm-blockDim.x];
+					f_U = sm[idx_sm+blockDim.x];
+				}
+				field_even[idx] += 0.25*omega*( f_L + f_R + f_U + f_D - dx*dx*rho_even[idx] - 4.*field_even[idx]);
 			}
 		}		
 	}
@@ -107,12 +149,19 @@ __global__ void SOR_SOLVER_EVEN(int N, double dx, double omega, double* field_ev
 
 __global__ void SOR_SOLVER_ODD(int N, double dx, double omega, double* field_even, double* field_odd, double* rho_odd)
 {
+	extern __shared__ double sm[];
 	int idx_x = threadIdx.x + blockIdx.x*blockDim.x;
 	int idx_y = threadIdx.y + blockIdx.y*blockDim.y;
 	int idx = idx_x + idx_y*N/2;
+	int idx_sm = threadIdx.x + blockDim.x*threadIdx.y;
+	
 
 	int site_x = idx%(N/2);		
 	int site_y = idx/(N/2);
+	double f_L, f_R, f_U, f_D;
+
+	sm[idx_sm] = field_even[idx];
+	__syncthreads();
 
 	if ( (idx>N/2-1)&&(idx<(N*N)/2-N/2))
 	{
@@ -120,22 +169,54 @@ __global__ void SOR_SOLVER_ODD(int N, double dx, double omega, double* field_eve
 		{
 			if (site_x!=(N/2)-1)
 			{
-				int L = idx;
-				int R = site_x+1 + site_y*(N/2);	
-				int D = site_x + (site_y-1)*(N/2);
-				int U = site_x + (site_y+1)*(N/2);
-				field_odd[idx] += 0.25*omega*( field_even[L] + field_even[R] + field_even[U] + field_even[D] - dx*dx*rho_odd[idx] - 4.*field_odd[idx]);
+				f_L = sm[idx_sm];
+				if (threadIdx.x<blockDim.x-1)
+					f_R = sm[idx_sm+1];
+				else
+					f_R = field_even[idx+1];
+				if (threadIdx.y==0)
+				{
+					f_D = field_even[idx-N/2];
+					f_U = sm[idx_sm+blockDim.x];
+				}
+				else if (threadIdx.y==blockDim.y-1)
+				{
+					f_D = sm[idx_sm-blockDim.x];
+					f_U = field_even[idx+N/2];
+				}
+				else
+				{
+					f_D = sm[idx_sm-blockDim.x];
+					f_U = sm[idx_sm+blockDim.x];
+				}
+				field_odd[idx] += 0.25*omega*( f_L + f_R + f_U + f_D - dx*dx*rho_odd[idx] - 4.*field_odd[idx]);
 			}
 		}		
 		else
 		{
 			if (site_x!=0)
 			{
-				int L = site_x-1 + site_y*(N/2);	
-				int R = idx;
-				int D = site_x + (site_y-1)*(N/2);
-				int U = site_x + (site_y+1)*(N/2);
-				field_odd[idx] += 0.25*omega*( field_even[L] + field_even[R] + field_even[U] + field_even[D] - dx*dx*rho_odd[idx] - 4.*field_odd[idx]);
+				f_R = sm[idx_sm];
+				if (threadIdx.x>0)
+					f_L = sm[idx_sm-1];
+				else
+					f_L = field_even[idx-1];
+				if (threadIdx.y==0)
+				{
+					f_D = field_even[idx-N/2];
+					f_U = sm[idx_sm+blockDim.x];
+				}
+				else if (threadIdx.y==blockDim.y-1)
+				{
+					f_D = sm[idx_sm-blockDim.x];
+					f_U = field_even[idx+N/2];
+				}
+				else
+				{
+					f_D = sm[idx_sm-blockDim.x];
+					f_U = sm[idx_sm+blockDim.x];
+				}
+				field_odd[idx] += 0.25*omega*( f_L + f_R + f_U + f_D - dx*dx*rho_odd[idx] - 4.*field_odd[idx]);
 			}
 		}		
 	}
@@ -273,6 +354,7 @@ int main(void)
 	cudaSetDevice(0);
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
+	cudaEventRecord(start,0);
 	dim3 tpb(tpb_x,tpb_y);
 	dim3 bpg(bpg_x,bpg_y);
 
@@ -283,7 +365,6 @@ int main(void)
     cublasSetMathMode(handle, mode);
     cublasSetPointerMode(handle, mode_pt);
 
-	cudaEventRecord(start,0);
 	cudaMallocManaged(&field_even, size_lattice/2);
 	cudaMallocManaged(&field_odd, size_lattice/2);
 	cudaMallocManaged(&field_analytic, size_lattice);
@@ -311,7 +392,6 @@ int main(void)
 
 	FPRINTF(output_field, N, field_analytic);
 	FPRINTF(output_rho, N, rho);
-	cudaEventRecord(start,0);
 
 	printf("Preparation ends.\n");
 	cudaEventRecord(stop,0);
@@ -326,10 +406,8 @@ int main(void)
 	iter = 0;
 	while (error>criteria&&iter<iter_max)
 	{
-		SOR_SOLVER_EVEN<<<bpg,tpb>>>(N, dx, omega, field_even, field_odd, rho_even);
-//		cudaDeviceSynchronize();
-		SOR_SOLVER_ODD<<<bpg,tpb>>>(N, dx, omega, field_even, field_odd, rho_odd);
-//		cudaDeviceSynchronize();
+		SOR_SOLVER_EVEN<<<bpg,tpb, size_sm>>>(N, dx, omega, field_even, field_odd, rho_even);
+		SOR_SOLVER_ODD<<<bpg,tpb,size_sm>>>(N, dx, omega, field_even, field_odd, rho_odd);
 		ERROR<<<bpg,tpb,size_sm>>>(N, dx, rho_even, rho_odd, field_even, field_odd, error_block);
 		cudaDeviceSynchronize();
 		error = EVALUATE_ERROR(N, N_block, norm, error_block);

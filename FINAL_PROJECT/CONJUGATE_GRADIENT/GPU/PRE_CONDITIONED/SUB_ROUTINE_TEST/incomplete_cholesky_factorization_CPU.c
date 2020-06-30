@@ -68,7 +68,7 @@ int main(void)
 	start = clock();
 	PRODUCE_CHOLESKY(N, row, dx, photon_mass, R_produced);
 	end = clock();
-	printf("Done. Total factorization time with out matrix is %.4f ms.\n",1000*(end-start)/CLOCKS_PER_SEC);
+	printf("Done. Total factorization time without matrix is %.4f ms.\n",1000*(end-start)/CLOCKS_PER_SEC);
 
 	FPRINTF(output_matrix, N*N, 1.0, R);
 	
