@@ -5,7 +5,7 @@
 #include <string.h>
 
 void FPRINTF(FILE*, int, double, double*);
-void INITIALIZE(int, double, double*, double*, double*, FILE*, FILE*);
+void INITIALIZE(int, double, double*, double*, double*);
 double EVALUATE_ERROR(int, double*, double*);
 void LAPLACIAN(int, double, double, double*, double*);
 void DAXPY_X(int, double, double*, double*);	// x is replaced
@@ -14,13 +14,13 @@ double DDOT(int, double*, double*);
 
 int main(void)
 {
-	int N, N_thread, shift, display_interval;
+	int N, N_thread, display_interval;
 	float preparation_time, computation_time, total_time;
 	double photon_mass, dx, criteria, error, norm;
 	double alpha, beta;
 	double start, end;
 	long iter, iter_max;
-	double *field, *rho, *neighbor_U, *neighbor_D, *r, *p, *A_p, *field_analytic;
+	double *field, *rho, *r, *p, *A_p, *field_analytic;
 	size_t size_lattice;
 	FILE* output_field, *output_rho;
 
@@ -45,6 +45,8 @@ int main(void)
 	printf("%d OpenMP threads are set.\n", N_thread);
 	printf("\n");
 	printf("Start Preparation...\n");
+
+	omp_set_num_threads(N_thread);
 	start = omp_get_wtime();
 
 	dx = 1./(N-1);	
@@ -58,9 +60,11 @@ int main(void)
 	output_field = fopen("analytical_field_distribution_CG_OpenMP.txt","w");
 	output_rho = fopen("charge_distribution_CG.txt","w");
 
-	omp_set_num_threads(N_thread);
+	INITIALIZE(N, dx, rho, field_analytic, field);
+	FPRINTF(output_field, N, 1., field_analytic);
+	FPRINTF(output_rho, N, pow(dx,-2.), rho);
+	fclose(output_field);
 
-	INITIALIZE(N, dx, rho, field_analytic, field, output_field, output_rho);
 	norm = DDOT(N*N, rho, rho);
 	norm = sqrt(norm);
 	printf("Norm = %.4e .\n",norm);
@@ -78,19 +82,18 @@ int main(void)
 
 	double temp;
 	iter = 0;
-
 	while (sqrt(error)/norm>criteria&&iter<iter_max)
 	{
 		LAPLACIAN(N, dx, photon_mass, p, A_p);
 		temp = DDOT(N*N, p, A_p);
-//		printf("%d\t%.4f\n", my_rank, temp_rank);
+//		printf("%.4f\n", temp);
 		alpha = error/temp;
 		DAXPY_Y(N*N, -alpha, A_p, r);
 		DAXPY_Y(N*N, alpha, p, field);
-		temp = DDOT(shift, r, r);
+		temp = DDOT(N*N, r, r);
 		beta = temp/error;
 //		printf("%.4f\t%.4f\n", alpha, beta);
-		DAXPY_X(N, beta, p, r);
+		DAXPY_X(N*N, beta, p, r);
 		error = temp;
 		iter += 1;
 		if (iter%display_interval==0)
@@ -106,27 +109,26 @@ int main(void)
 	printf("Total iteration is %ld ; total time is %.4f s.\n", iter, total_time);
 
 	free(field);
+	free(field_analytic);
+	free(rho);
 	free(r);
 	free(p);
 	free(A_p);
-	fclose(output_field);
 	return EXIT_SUCCESS;
 }
 
-void INITIALIZE(int N, double dx, double* rho, double* field_analytic, double* field, FILE* output_field, FILE* output_rho)
+void INITIALIZE(int N, double dx, double* rho, double* field_analytic, double* field)
 {
-	int idx_x, idx_y, idx_y_lattice;
-	double x, y;
 	double* temp = malloc(N*N*sizeof(double));
 
 #	pragma omp parallel for
 	for (int idx=0; idx<N*N; idx++)
 	{
-		idx_x = idx%N;
-		idx_y = idx/N;
+		int idx_x = idx%N;
+		int idx_y = idx/N;
 	
-		x = idx_x*dx;
-		y = idx_y*dx;
+		double x = idx_x*dx;
+		double y = idx_y*dx;
 		temp[idx] = x*(1.-x)*y*(1.-y)*exp(x-y);
 	
 		field_analytic[idx] = temp[idx];
@@ -141,32 +143,24 @@ void INITIALIZE(int N, double dx, double* rho, double* field_analytic, double* f
 			rho[idx] = 0.0;
 		}
 	}
-	
-	FPRINTF(output_field, N, 1., field_analytic);
-	FPRINTF(output_rho, N, pow(dx,-2.), rho);
-	fclose(output_rho);
-	free(rho);
-	free(field_analytic);
 	free(temp);
 }
 
 double EVALUATE_ERROR(int N, double* rho, double* field)
 {
 	double error = 0.0;
-	int idx_x, idx_y;
-	double L, R, U, D;
 #	pragma omp parallel for reduction( +:error )
 	for (int idx=0; idx<N*N; idx++)
 	{
-		idx_x = idx%N;
-		idx_y = idx/N;
+		int idx_x = idx%N;
+		int idx_y = idx/N;
 	
 		if (idx_x!=0&&idx_x!=N-1&&idx_y!=0&&idx_y!=N-1)
 		{
-			L = field[idx-1];
-			R = field[idx+1];
-			U = field[idx+N];
-			D = field[idx-N];
+			double L = field[idx-1];
+			double R = field[idx+1];
+			double U = field[idx+N];
+			double D = field[idx-N];
 
 			error += pow(L + R + U + D - 4.*field[idx] - rho[idx], 2.);
 		}
@@ -176,20 +170,18 @@ double EVALUATE_ERROR(int N, double* rho, double* field)
 
 void LAPLACIAN(int N, double dx, double photon_mass, double* p, double* A_p)
 {
-	int idx_x, idx_y;
-	double L, R, U, D;
 #	pragma omp parallel for 
 	for (int idx=0; idx<N*N; idx++)
 	{
-		idx_x = idx%N;
-		idx_y = idx/N;
+		int idx_x = idx%N;
+		int idx_y = idx/N;
 		
 		if (idx_x!=0&&idx_x!=N-1&&idx_y!=0&&idx_y!=N-1)
 		{
-			L = p[idx-1];
-			R = p[idx+1];
-			U = p[idx+N];
-			D = p[idx-N];
+			double L = p[idx-1];
+			double R = p[idx+1];
+			double U = p[idx+N];
+			double D = p[idx-N];
 	
 			A_p[idx] = ( L + R + U + D - (4.+pow(photon_mass*dx,2.))*p[idx]);
 	//		printf("%d\t%.4f\n", idx, A_p[idx]);

@@ -153,6 +153,8 @@ int main(int argc, char* argv[])
 //		printf("%d\t%.4f\n", my_rank, temp_rank);
 		MPI_Reduce(&temp_rank, &temp, 1, MPI_DOUBLE, MPI_SUM, root_rank, MPI_COMM_WORLD);
 		MPI_Bcast( &temp, 1, MPI_DOUBLE, root_rank, MPI_COMM_WORLD);
+//		if (my_rank==root_rank)
+//			printf("%.4f\n", temp);
 		alpha = error/temp;
 		DAXPY_Y(shift, -alpha, A_p, r);
 		DAXPY_Y(shift, alpha, p, field_rank);
@@ -160,7 +162,8 @@ int main(int argc, char* argv[])
 		MPI_Reduce(&temp_rank, &temp, 1, MPI_DOUBLE, MPI_SUM, root_rank, MPI_COMM_WORLD);
 		MPI_Bcast( &temp, 1, MPI_DOUBLE, root_rank, MPI_COMM_WORLD);
 		beta = temp/error;
-//		printf("%.4f\t%.4f\n", alpha, beta);
+//		if (my_rank==root_rank)
+//			printf("%.4f\t%.4f\n", alpha, beta);
 		DAXPY_X(shift, beta, p, r);
 		error = temp;
 		iter += 1;
