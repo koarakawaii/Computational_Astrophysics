@@ -1,19 +1,19 @@
 CUDIR     := /usr/local/cuda
-GSLDIR	  := /home/lab/gsl
-LAPACKDIR := /home/lab/OpenBLAS/lapack-netlib/LAPACKE
+GSLDIR	  := /usr/local/gsl
+OPENBLASDIR := /usr/local/openblas
 
 CC      := gcc
 CFLAGS  := -O3 -Wall -g
 CPP     := g++
 CFLAGS  := -O3 -Wall -g
 NVCC    := $(CUDIR)/bin/nvcc
-NVFLAGS := -O3 --compiler-options -fopenmp -I$(LAPACKDIR)/include -I$(CUDIR)/include -I$(GSLDIR)/include -m64 -arch=compute_75 -code=sm_75 -Xptxas -v
+NVFLAGS := -O3 --compiler-options -fopenmp -I$(OPENBLASDIR)/include -I$(CUDIR)/include -I$(GSLDIR)/include -m64 -arch=compute_75 -code=sm_75 -Xptxas -v
 
 BIN     := CONJUGATE_GRADIENT_SOLVER_PRE_CONDITIONED_CHOLESKY CONJUGATE_GRADIENT_SOLVER_PRE_CONDITIONED_SSOR CONJUGATE_GRADIENT_SOLVER_PRE_CONDITIONED_JACOBI 
 FILE_CHOLESKY    :=CONJUGATE_GRADIENT_SOLVER_PRE_CONDITIONED_CHOLESKY.cu 
 FILE_SSOR    :=CONJUGATE_GRADIENT_SOLVER_PRE_CONDITIONED_SSOR.cu 
 FILE_JACOBI    :=CONJUGATE_GRADIENT_SOLVER_PRE_CONDITIONED_JACOBI.cu
-LIB     := -lgsl -lgslcblas -llapack -lm -lcublas -lcurand 
+LIB     := -lgsl -lgslcblas -lm -lcublas -lcurand -L$(GSLDIR)/lib -L$(OPENBLAS)/lib
 
 all: $(BIN)
 

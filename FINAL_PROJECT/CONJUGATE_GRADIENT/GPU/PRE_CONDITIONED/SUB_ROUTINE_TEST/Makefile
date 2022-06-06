@@ -1,19 +1,20 @@
 CUDIR     := /usr/local/cuda
-GSLDIR	  := /home/lab/gsl
+GSLDIR	  := /usr/local/gsl
+OPENBLASDIR := /usr/local/openblas
 
 CC      := gcc
-CFLAGS  := -O3 -Wall -g
+CFLAGS  := -O3 -Wall -g -fopenmp -I$(GSLDIR)/include -I$(OPENBLASDIR)/include 
 NVCC    := $(CUDIR)/bin/nvcc
-NVFLAGS := -O3 --compiler-options -fopenmp -I$(CUDIR)/include -I$(GSLDIR)/include -m64 -arch=compute_75 -code=sm_75 -Xptxas -v
+NVFLAGS := -O3 --compiler-options -fopenmp -I$(CUDIR)/include -I$(OPENBLASDIR)/include -m64 -arch=compute_75 -code=sm_75 -Xptxas -v
 
-BIN     := test_SSOR_M_MATRIX cholesky_factorization_CPU cholesky_factorization_GPU CONJUGATE_GRADIENT_SOLVER_TEST incomplete_cholesky_factorization_CPU test_IC_M_MATRIX
+BIN     := test_SSOR_M_MATRIX cholesky_factorization_CPU cholesky_factorization_GPU test_CG incomplete_cholesky_factorization_CPU test_IC_M_MATRIX
 FILE_M_SSOR_TEST		:= test_SSOR_M_MATRIX.c 
 FILE_M_IC_TEST		:= test_IC_M_MATRIX.c 
 FILE_CHOLESKY_CPU := cholesky_factorization_CPU.c
 FILE_CHOLESKY_GPU := cholesky_factorization_GPU.cu
 FILE_CG_TEST	:= CONJUGATE_GRADIENT_SOLVER_TEST.cu 
 FILE_INCOMPLETE_CHOLESKY_CPU := incomplete_cholesky_factorization_CPU.c
-LIB     := -lgsl -lgslcblas -llapack -lm -lcublas -lcurand -lcusolver -fopenmp
+LIB     := -lgsl -lm -lcublas -lcurand -lcusolver -lopenblas -L$(GSLDIR)/lib -L$(CUDIR)/lib64 -L$(OPENBLASDIR)/lib
 
 all: $(BIN)
 
