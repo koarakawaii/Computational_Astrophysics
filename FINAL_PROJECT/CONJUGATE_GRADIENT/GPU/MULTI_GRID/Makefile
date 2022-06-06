@@ -1,5 +1,6 @@
 CUDIR     := /usr/local/cuda
-GSLDIR	  := /home/lab/gsl
+GSLDIR	  := /usr/local/gsl
+OPENBLASDIR := /usr/local/openblas
 
 CC      := gcc
 CFLAGS  := -O3 -Wall -g
@@ -14,7 +15,7 @@ FILE_MGCG    := CONJUGATE_GRADIENT_SOLVER_MULTI_GRID.cu
 FILE_MGCG_MIXED := CONJUGATE_GRADIENT_SOLVER_MULTI_GRID_MIXED.cu
 FILE_MGCG_FULL_V_MIXED := CONJUGATE_GRADIENT_SOLVER_MULTI_GRID_FULL_V_MIXED.cu
 FILE_TGCG    := CONJUGATE_GRADIENT_SOLVER_TWO_GRID.cu 
-LIB     := -lgsl -lgslcblas -lm -lcublas
+LIB     := -lgsl -lopenblas -lm -lcublas -L$(GSLDIR)/lib -L$(OPENBLASDIR)/lib
 
 
 all: $(BIN)
